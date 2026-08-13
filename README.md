@@ -51,7 +51,7 @@ Variables opcionales de `run_all.sh`:
 |---|---|
 | `SKIP_SETUP=1` | no recrear venvs ni reinstalar dependencias |
 | `SKIP_DATA=1` | no descargar/preparar datos (ya preparados) |
-| `RUN_TUNE=1` | correr búsqueda de hiperparámetros (Optuna) antes del detector |
+| `RUN_TUNE=1` | correr búsqueda de hiperparámetros (Optuna) y aplicar el resultado a las dos versiones del detector |
 
 Los scripts de descarga son idempotentes: si algo se corta, volver a correr `bash run_all.sh` retoma sin re-descargar lo que ya está.
 

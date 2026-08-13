@@ -51,16 +51,20 @@ if [ "${SKIP_DATA:-0}" != "1" ]; then
     "$TORCH_PY" data/prepare_data.py
 fi
 
+# Si se corre la busqueda, sus resultados alimentan las DOS versiones del detector:
+# tunear solo PyTorch sesgaria la comparacion TF vs PyTorch.
+HPARAMS_ARG=""
 if [ "${RUN_TUNE:-0}" = "1" ]; then
     log "Busqueda de hiperparametros del detector (Optuna)"
     "$TORCH_PY" train/tune_detector_pytorch.py
+    HPARAMS_ARG="--hparams-from metrics/detector_best_hparams.json"
 fi
 
 log "Modelo 1 (detector) - PyTorch"
-"$TORCH_PY" train/train_detector_pytorch.py
+"$TORCH_PY" train/train_detector_pytorch.py $HPARAMS_ARG
 
 log "Modelo 1 (detector) - TensorFlow"
-"$TF_PY" train/train_detector_tensorflow.py
+"$TF_PY" train/train_detector_tensorflow.py $HPARAMS_ARG
 
 log "Modelo 2 (raza perro) - PyTorch"
 "$TORCH_PY" train/train_dog_breed_pytorch.py

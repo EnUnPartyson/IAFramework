@@ -65,3 +65,36 @@ def save_metrics_json(report: dict, out_path: Path) -> None:
 
 def file_size_mb(path: Path) -> float:
     return round(path.stat().st_size / (1024 * 1024), 2)
+
+
+# hiperparametros que Optuna puede buscar y que ambos frameworks aceptan por igual
+TUNABLE_HPARAMS = ("lr", "batch_size", "dropout", "weight_decay")
+HPARAM_DEFAULTS = {"lr": 1e-3, "batch_size": 64, "dropout": 0.4, "weight_decay": 1e-4}
+
+
+def resolve_hparams(args, hparams_from: Path | None) -> dict:
+    """Precedencia: valor explicito en la linea de comandos > JSON de Optuna > default.
+
+    Los argumentos tuneables llegan como None si el usuario no los paso, para poder
+    distinguir "no lo especifico" de "lo puso igual al default".
+    """
+    from_json: dict = {}
+    if hparams_from is not None:
+        if not hparams_from.exists():
+            raise FileNotFoundError(
+                f"No existe {hparams_from}. Correr primero la busqueda con tune_detector_pytorch.py"
+            )
+        with open(hparams_from, "r", encoding="utf-8") as f:
+            from_json = json.load(f).get("best_params", {})
+        print(f"Hiperparametros tomados de {hparams_from}: {from_json}")
+
+    resolved = {}
+    for name in TUNABLE_HPARAMS:
+        cli_value = getattr(args, name, None)
+        if cli_value is not None:
+            resolved[name] = cli_value
+        elif name in from_json:
+            resolved[name] = from_json[name]
+        else:
+            resolved[name] = HPARAM_DEFAULTS[name]
+    return resolved

@@ -20,6 +20,7 @@ from utils.report_common import (  # noqa: E402
     class_weight_values,
     file_size_mb,
     metrics_from_predictions,
+    resolve_hparams,
     save_confusion_matrix_plot,
     save_metrics_json,
 )
@@ -34,10 +35,18 @@ def build_arg_parser(task: str, default_epochs: int = 30) -> argparse.ArgumentPa
     parser = argparse.ArgumentParser(description=f"Entrena el modelo '{task}' en TensorFlow/Keras")
     parser.add_argument("--data-dir", type=Path, default=ROOT_DIR / "data" / "processed" / task)
     parser.add_argument("--epochs", type=int, default=default_epochs)
-    parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--dropout", type=float, default=0.4)
-    parser.add_argument("--weight-decay", type=float, default=1e-4)
+    # default None a proposito: distingue "no lo paso" de "lo paso igual al default",
+    # necesario para que --hparams-from no pise un valor explicito (ver resolve_hparams)
+    parser.add_argument("--batch-size", type=int, default=None)
+    parser.add_argument("--lr", type=float, default=None)
+    parser.add_argument("--dropout", type=float, default=None)
+    parser.add_argument("--weight-decay", type=float, default=None)
+    parser.add_argument(
+        "--hparams-from",
+        type=Path,
+        default=None,
+        help="JSON con los mejores hiperparametros (los mismos que la version PyTorch, para comparar parejo)",
+    )
     parser.add_argument("--patience", type=int, default=6, help="early stopping: epocas sin mejorar val_accuracy")
     parser.add_argument("--model-out", type=Path, default=ROOT_DIR / "models" / f"{task}_tensorflow.keras")
     parser.add_argument("--metrics-out", type=Path, default=ROOT_DIR / "metrics" / f"{task}_tensorflow_metrics.json")
@@ -52,7 +61,10 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     gpus = tf.config.list_physical_devices("GPU")
     print(f"[{task}/tensorflow] GPUs visibles: {len(gpus)}")
 
-    train_ds, val_ds, test_ds, class_names = make_datasets(args.data_dir, args.batch_size)
+    hp = resolve_hparams(args, args.hparams_from)
+    print(f"[{task}/tensorflow] hiperparametros: {hp}")
+
+    train_ds, val_ds, test_ds, class_names = make_datasets(args.data_dir, hp["batch_size"])
     if expected_classes is not None and tuple(class_names) != tuple(expected_classes):
         raise ValueError(f"Clases en {args.data_dir} ({class_names}) != esperadas ({expected_classes})")
 
@@ -60,9 +72,9 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     print(f"[{task}/tensorflow] clases ({len(class_names)}): {dict(zip(class_names, class_counts))}")
     class_weight = {i: w for i, w in enumerate(class_weight_values(class_counts))}
 
-    model = build_simple_cnn(num_classes=len(class_names), dropout=args.dropout)
+    model = build_simple_cnn(num_classes=len(class_names), dropout=hp["dropout"])
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=args.lr, weight_decay=args.weight_decay),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=hp["lr"], weight_decay=hp["weight_decay"]),
         loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         metrics=["accuracy"],
     )
@@ -93,7 +105,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     # el .keras (y save_weights sobre un modelo compilado) incluye el estado del optimizador Adam
     # (~3x el tamano de los pesos); para que "tamano_pesos_mb" sea comparable con el state_dict de
     # PyTorch se copian los pesos a un modelo fresco sin compilar y se mide ese archivo
-    export_model = build_simple_cnn(num_classes=len(class_names), dropout=args.dropout)
+    export_model = build_simple_cnn(num_classes=len(class_names), dropout=hp["dropout"])
     export_model.set_weights(model.get_weights())
     weights_tmp = args.model_out.parent / (args.model_out.stem + ".weights.h5")
     export_model.save_weights(weights_tmp)
@@ -126,10 +138,11 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
         "hiperparametros": {
             "epochs_max": args.epochs,
             "epochs_corridas": epochs_run,
-            "batch_size": args.batch_size,
-            "lr_inicial": args.lr,
-            "dropout": args.dropout,
-            "weight_decay": args.weight_decay,
+            "batch_size": hp["batch_size"],
+            "lr_inicial": hp["lr"],
+            "dropout": hp["dropout"],
+            "weight_decay": hp["weight_decay"],
+            "hparams_origen": str(args.hparams_from) if args.hparams_from else "defaults/CLI",
             "early_stopping_paciencia": args.patience,
             "scheduler": f"ReduceLROnPlateau(factor={SCHEDULER_FACTOR}, patience={SCHEDULER_PATIENCE})",
         },

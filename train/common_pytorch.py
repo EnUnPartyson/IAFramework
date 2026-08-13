@@ -22,6 +22,7 @@ from utils.report_common import (  # noqa: E402
     class_weight_values,
     file_size_mb,
     metrics_from_predictions,
+    resolve_hparams,
     save_confusion_matrix_plot,
     save_metrics_json,
 )
@@ -36,10 +37,18 @@ def build_arg_parser(task: str, default_epochs: int = 30) -> argparse.ArgumentPa
     parser = argparse.ArgumentParser(description=f"Entrena el modelo '{task}' en PyTorch")
     parser.add_argument("--data-dir", type=Path, default=ROOT_DIR / "data" / "processed" / task)
     parser.add_argument("--epochs", type=int, default=default_epochs)
-    parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--dropout", type=float, default=0.4)
-    parser.add_argument("--weight-decay", type=float, default=1e-4)
+    # default None a proposito: distingue "no lo paso" de "lo paso igual al default",
+    # necesario para que --hparams-from no pise un valor explicito (ver resolve_hparams)
+    parser.add_argument("--batch-size", type=int, default=None)
+    parser.add_argument("--lr", type=float, default=None)
+    parser.add_argument("--dropout", type=float, default=None)
+    parser.add_argument("--weight-decay", type=float, default=None)
+    parser.add_argument(
+        "--hparams-from",
+        type=Path,
+        default=None,
+        help="JSON generado por tune_detector_pytorch.py con los mejores hiperparametros",
+    )
     parser.add_argument("--patience", type=int, default=6, help="early stopping: epocas sin mejorar val_accuracy")
     parser.add_argument("--model-out", type=Path, default=ROOT_DIR / "models" / f"{task}_pytorch.pt")
     parser.add_argument("--metrics-out", type=Path, default=ROOT_DIR / "metrics" / f"{task}_pytorch_metrics.json")
@@ -110,16 +119,19 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[{task}/pytorch] device: {device}")
 
+    hp = resolve_hparams(args, args.hparams_from)
+    print(f"[{task}/pytorch] hiperparametros: {hp}")
+
     train_loader, val_loader, test_loader, class_names, class_counts = build_dataloaders(
-        args.data_dir, args.batch_size
+        args.data_dir, hp["batch_size"]
     )
     if expected_classes is not None and tuple(class_names) != tuple(expected_classes):
         raise ValueError(f"Clases en {args.data_dir} ({class_names}) != esperadas ({expected_classes})")
     print(f"[{task}/pytorch] clases ({len(class_names)}): {dict(zip(class_names, class_counts))}")
 
-    model = SimpleCNN(num_classes=len(class_names), dropout=args.dropout).to(device)
+    model = SimpleCNN(num_classes=len(class_names), dropout=hp["dropout"]).to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights_from_counts(class_counts, device))
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=hp["lr"], weight_decay=hp["weight_decay"])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="max", factor=SCHEDULER_FACTOR, patience=SCHEDULER_PATIENCE
     )
@@ -155,7 +167,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
             best_val_acc = val_acc
             epochs_without_improvement = 0
             torch.save(
-                {"state_dict": model.state_dict(), "class_names": class_names, "dropout": args.dropout},
+                {"state_dict": model.state_dict(), "class_names": class_names, "dropout": hp["dropout"]},
                 args.model_out,
             )
         else:
@@ -176,10 +188,11 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
         "hiperparametros": {
             "epochs_max": args.epochs,
             "epochs_corridas": epochs_run,
-            "batch_size": args.batch_size,
-            "lr_inicial": args.lr,
-            "dropout": args.dropout,
-            "weight_decay": args.weight_decay,
+            "batch_size": hp["batch_size"],
+            "lr_inicial": hp["lr"],
+            "dropout": hp["dropout"],
+            "weight_decay": hp["weight_decay"],
+            "hparams_origen": str(args.hparams_from) if args.hparams_from else "defaults/CLI",
             "early_stopping_paciencia": args.patience,
             "scheduler": f"ReduceLROnPlateau(factor={SCHEDULER_FACTOR}, patience={SCHEDULER_PATIENCE})",
         },
