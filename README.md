@@ -52,6 +52,9 @@ Variables opcionales de `run_all.sh`:
 | `SKIP_SETUP=1` | no recrear venvs ni reinstalar dependencias |
 | `SKIP_DATA=1` | no descargar/preparar datos (ya preparados) |
 | `RUN_TUNE=1` | correr búsqueda de hiperparámetros (Optuna) y aplicar el resultado a las dos versiones del detector |
+| `TUNE_TRIALS=N` | cuántos trials prueba Optuna (default 20) |
+| `SKIP_TORCH=1` / `SKIP_TF=1` | reentrenar solo la mitad del otro framework |
+| `ALLOW_CPU=1` | permitir entrenar sin GPU (por defecto **aborta**: entrenar en CPU sin querer da resultados no comparables y tarda ~12× más) |
 
 Los scripts de descarga son idempotentes: si algo se corta, volver a correr `bash run_all.sh` retoma sin re-descargar lo que ya está.
 
