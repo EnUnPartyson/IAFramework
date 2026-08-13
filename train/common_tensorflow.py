@@ -1,0 +1,156 @@
+"""Motor de entrenamiento TensorFlow/Keras compartido por los 3 modelos.
+
+Espejo de common_pytorch.py: mismos hiperparametros por defecto, misma seleccion de modelo
+(val_accuracy), mismo early stopping y scheduler (ReduceLROnPlateau), mismo esquema de metricas.
+Nunca importar torch aca.
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+import tensorflow as tf
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from utils.model_defs_tensorflow import build_simple_cnn  # noqa: E402
+from utils.report_common import (  # noqa: E402
+    class_weight_values,
+    file_size_mb,
+    metrics_from_predictions,
+    save_confusion_matrix_plot,
+    save_metrics_json,
+)
+from utils.transforms_tensorflow import count_train_images_per_class, make_datasets  # noqa: E402
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+SCHEDULER_PATIENCE = 2
+SCHEDULER_FACTOR = 0.5
+
+
+def build_arg_parser(task: str, default_epochs: int = 30) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=f"Entrena el modelo '{task}' en TensorFlow/Keras")
+    parser.add_argument("--data-dir", type=Path, default=ROOT_DIR / "data" / "processed" / task)
+    parser.add_argument("--epochs", type=int, default=default_epochs)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--dropout", type=float, default=0.4)
+    parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--patience", type=int, default=6, help="early stopping: epocas sin mejorar val_accuracy")
+    parser.add_argument("--model-out", type=Path, default=ROOT_DIR / "models" / f"{task}_tensorflow.keras")
+    parser.add_argument("--metrics-out", type=Path, default=ROOT_DIR / "metrics" / f"{task}_tensorflow_metrics.json")
+    return parser
+
+
+def _labels_from_dataset(dataset: tf.data.Dataset) -> list[int]:
+    return np.concatenate([labels.numpy() for _, labels in dataset]).tolist()
+
+
+def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str, ...] | None = None) -> dict:
+    gpus = tf.config.list_physical_devices("GPU")
+    print(f"[{task}/tensorflow] GPUs visibles: {len(gpus)}")
+
+    train_ds, val_ds, test_ds, class_names = make_datasets(args.data_dir, args.batch_size)
+    if expected_classes is not None and tuple(class_names) != tuple(expected_classes):
+        raise ValueError(f"Clases en {args.data_dir} ({class_names}) != esperadas ({expected_classes})")
+
+    _, class_counts = count_train_images_per_class(args.data_dir)
+    print(f"[{task}/tensorflow] clases ({len(class_names)}): {dict(zip(class_names, class_counts))}")
+    class_weight = {i: w for i, w in enumerate(class_weight_values(class_counts))}
+
+    model = build_simple_cnn(num_classes=len(class_names), dropout=args.dropout)
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=args.lr, weight_decay=args.weight_decay),
+        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        metrics=["accuracy"],
+    )
+
+    callbacks = [
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_accuracy", patience=args.patience, restore_best_weights=True
+        ),
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor="val_accuracy", factor=SCHEDULER_FACTOR, patience=SCHEDULER_PATIENCE
+        ),
+    ]
+
+    start_time = time.time()
+    fit_history = model.fit(
+        train_ds,
+        validation_data=val_ds,
+        epochs=args.epochs,
+        class_weight=class_weight,
+        callbacks=callbacks,
+        verbose=2,
+    )
+    training_time = time.time() - start_time
+
+    args.model_out.parent.mkdir(parents=True, exist_ok=True)
+    model.save(args.model_out)
+
+    # el .keras (y save_weights sobre un modelo compilado) incluye el estado del optimizador Adam
+    # (~3x el tamano de los pesos); para que "tamano_pesos_mb" sea comparable con el state_dict de
+    # PyTorch se copian los pesos a un modelo fresco sin compilar y se mide ese archivo
+    export_model = build_simple_cnn(num_classes=len(class_names), dropout=args.dropout)
+    export_model.set_weights(model.get_weights())
+    weights_tmp = args.model_out.parent / (args.model_out.stem + ".weights.h5")
+    export_model.save_weights(weights_tmp)
+    weights_only_mb = file_size_mb(weights_tmp)
+    weights_tmp.unlink()
+
+    logits = model.predict(test_ds, verbose=0)
+    preds = logits.argmax(axis=1).tolist()
+    labels = _labels_from_dataset(test_ds)
+    test_metrics = metrics_from_predictions(labels, preds, class_names)
+
+    epochs_run = len(fit_history.history["loss"])
+    history = [
+        {
+            "epoch": i + 1,
+            "train_loss": float(fit_history.history["loss"][i]),
+            "train_acc": float(fit_history.history["accuracy"][i]),
+            "val_loss": float(fit_history.history["val_loss"][i]),
+            "val_acc": float(fit_history.history["val_accuracy"][i]),
+            "lr": float(fit_history.history["learning_rate"][i])
+            if "learning_rate" in fit_history.history
+            else None,
+        }
+        for i in range(epochs_run)
+    ]
+
+    report = {
+        "framework": "tensorflow",
+        "tarea": task,
+        "hiperparametros": {
+            "epochs_max": args.epochs,
+            "epochs_corridas": epochs_run,
+            "batch_size": args.batch_size,
+            "lr_inicial": args.lr,
+            "dropout": args.dropout,
+            "weight_decay": args.weight_decay,
+            "early_stopping_paciencia": args.patience,
+            "scheduler": f"ReduceLROnPlateau(factor={SCHEDULER_FACTOR}, patience={SCHEDULER_PATIENCE})",
+        },
+        "distribucion_train": dict(zip(class_names, class_counts)),
+        "tiempo_entrenamiento_seg": round(training_time, 1),
+        "mejor_val_accuracy": float(max(fit_history.history["val_accuracy"])),
+        "tamano_pesos_mb": weights_only_mb,
+        "tamano_archivo_modelo_mb": file_size_mb(args.model_out),
+        "historia": history,
+        "test": test_metrics,
+    }
+    save_metrics_json(report, args.metrics_out)
+    save_confusion_matrix_plot(
+        test_metrics["matriz_confusion"],
+        class_names,
+        args.metrics_out.parent / f"{task}_tensorflow_confusion_matrix.png",
+    )
+
+    print(f"[{task}/tensorflow] modelo: {args.model_out}")
+    print(f"[{task}/tensorflow] metricas: {args.metrics_out}")
+    print(
+        f"[{task}/tensorflow] test accuracy={test_metrics['accuracy']:.4f} f1_macro={test_metrics['f1_macro']:.4f}"
+    )
+    return report

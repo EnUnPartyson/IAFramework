@@ -1,0 +1,62 @@
+"""Carga de datos y augmentation para los pipelines TensorFlow/Keras.
+
+Lee los mismos directorios data/processed/<tarea>/{train,val,test}/<clase>/ que la version
+PyTorch, asi ambos frameworks entrenan y evaluan sobre splits identicos.
+La augmentation aproxima la de transforms_pytorch (flip horizontal, rotacion ~15 grados,
+zoom que emula RandomResizedCrop, jitter de brillo/contraste). La normalizacion a [-1, 1]
+vive dentro del modelo (capa Rescaling en model_defs_tensorflow).
+Nunca importar torch aca.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+import tensorflow as tf
+from tensorflow.keras import layers
+
+IMG_SIZE = 128
+
+
+def build_augmentation() -> tf.keras.Sequential:
+    return tf.keras.Sequential([
+        layers.RandomFlip("horizontal"),
+        layers.RandomRotation(15 / 360),
+        layers.RandomZoom(height_factor=(-0.3, 0.0)),  # solo zoom-in, emula RandomResizedCrop(0.5-1.0)
+        layers.RandomBrightness(0.2, value_range=(0.0, 255.0)),
+        layers.RandomContrast(0.2),
+    ])
+
+
+def count_train_images_per_class(data_dir: Path) -> tuple[list[str], list[int]]:
+    train_dir = Path(data_dir) / "train"
+    class_names = sorted(d.name for d in train_dir.iterdir() if d.is_dir())
+    counts = [len(list((train_dir / name).glob("*.jpg"))) for name in class_names]
+    return class_names, counts
+
+
+def make_datasets(
+    data_dir: Path, batch_size: int, img_size: int = IMG_SIZE
+) -> tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset, list[str]]:
+    data_dir = Path(data_dir)
+    common = dict(label_mode="int", image_size=(img_size, img_size), batch_size=batch_size)
+
+    train_ds = tf.keras.utils.image_dataset_from_directory(
+        data_dir / "train", shuffle=True, seed=42, **common
+    )
+    val_ds = tf.keras.utils.image_dataset_from_directory(data_dir / "val", shuffle=False, **common)
+    test_ds = tf.keras.utils.image_dataset_from_directory(data_dir / "test", shuffle=False, **common)
+
+    class_names = list(train_ds.class_names)
+
+    augmentation = build_augmentation()
+    train_ds = train_ds.map(
+        lambda x, y: (augmentation(x, training=True), y), num_parallel_calls=tf.data.AUTOTUNE
+    )
+
+    autotune = tf.data.AUTOTUNE
+    return (
+        train_ds.prefetch(autotune),
+        val_ds.prefetch(autotune),
+        test_ds.prefetch(autotune),
+        class_names,
+    )

@@ -1,0 +1,30 @@
+# Datasets (nunca a git, son pesados y se regeneran con download_dataset.py)
+data/raw/
+data/processed/
+
+# Pesos y checkpoints de modelos
+models/
+*.pt
+*.pth
+*.h5
+*.keras
+checkpoints/
+
+# Entornos virtuales
+venv/
+venv-torch/
+venv-tf/
+.venv/
+__pycache__/
+*.pyc
+
+# Configuración local / credenciales
+.env
+*.pem
+
+# OS / editor
+.DS_Store
+.vscode/settings.json
+
+# Logs
+*.log
