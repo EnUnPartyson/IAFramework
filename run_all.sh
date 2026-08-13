@@ -9,7 +9,9 @@
 # Variables opcionales:
 #   SKIP_SETUP=1      no crear venvs ni instalar dependencias (ya instaladas)
 #   SKIP_DATA=1       no descargar ni preparar datos (ya preparados)
-#   RUN_TUNE=1        correr la busqueda de hiperparametros con Optuna antes del detector
+#   RUN_TUNE=1        correr la busqueda de hiperparametros con Optuna y aplicar el
+#                     resultado a las dos versiones del detector
+#   TUNE_TRIALS=N     cuantos trials prueba Optuna (default 20; bajar a 5-8 en CPU)
 #   TORCH_INDEX_URL   indice extra de pip para wheels de torch (por defecto no se usa:
 #                     en Linux los wheels de PyPI ya traen CUDA)
 set -euo pipefail
@@ -55,8 +57,8 @@ fi
 # tunear solo PyTorch sesgaria la comparacion TF vs PyTorch.
 HPARAMS_ARG=""
 if [ "${RUN_TUNE:-0}" = "1" ]; then
-    log "Busqueda de hiperparametros del detector (Optuna)"
-    "$TORCH_PY" train/tune_detector_pytorch.py
+    log "Busqueda de hiperparametros del detector (Optuna, ${TUNE_TRIALS:-20} trials)"
+    "$TORCH_PY" train/tune_detector_pytorch.py --trials "${TUNE_TRIALS:-20}"
     HPARAMS_ARG="--hparams-from metrics/detector_best_hparams.json"
 fi
 
