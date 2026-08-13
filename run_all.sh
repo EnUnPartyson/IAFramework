@@ -22,18 +22,25 @@ TF_PY="venv-tf/bin/python"
 log() { echo ""; echo "=== [$(date '+%H:%M:%S')] $* ==="; }
 
 if [ "${SKIP_SETUP:-0}" != "1" ]; then
-    log "Creando venvs e instalando dependencias"
+    # sin -q a proposito: torch+CUDA son ~2.5GB y TF ~600MB, sin barra de progreso
+    # parece colgado durante 10-25 minutos
+    log "Creando venv de PyTorch e instalando dependencias (~2.5GB, puede tardar)"
     [ -d venv-torch ] || "$PYTHON" -m venv venv-torch
-    venv-torch/bin/pip install --upgrade pip -q
+    venv-torch/bin/pip install --upgrade pip
     if [ -n "${TORCH_INDEX_URL:-}" ]; then
-        venv-torch/bin/pip install -r requirements-torch.txt --extra-index-url "$TORCH_INDEX_URL" -q
+        venv-torch/bin/pip install -r requirements-torch.txt --extra-index-url "$TORCH_INDEX_URL"
     else
-        venv-torch/bin/pip install -r requirements-torch.txt -q
+        venv-torch/bin/pip install -r requirements-torch.txt
     fi
 
+    log "Creando venv de TensorFlow e instalando dependencias (~600MB, puede tardar)"
     [ -d venv-tf ] || "$PYTHON" -m venv venv-tf
-    venv-tf/bin/pip install --upgrade pip -q
-    venv-tf/bin/pip install -r requirements-tf.txt -q
+    venv-tf/bin/pip install --upgrade pip
+    venv-tf/bin/pip install -r requirements-tf.txt
+
+    log "Verificando instalaciones"
+    "$TORCH_PY" -c "import torch; print('torch', torch.__version__, '| CUDA disponible:', torch.cuda.is_available())"
+    "$TF_PY" -c "import tensorflow as tf; print('tensorflow', tf.__version__, '| GPUs:', len(tf.config.list_physical_devices('GPU')))"
 fi
 
 if [ "${SKIP_DATA:-0}" != "1" ]; then

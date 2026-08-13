@@ -29,22 +29,29 @@ PLACES365_EXCLUDE_KEYWORDS = ("dog", "cat", "kennel", "pet", "veterinar")
 DOG_BREEDS_TOP_N = 15
 
 
-def _valid_images(paths: list[Path]) -> list[Path]:
+def _progress(done: int, total: int, label: str, every: int = 2000) -> None:
+    if done % every == 0 or done == total:
+        print(f"    {label}: {done}/{total}", flush=True)
+
+
+def _valid_images(paths: list[Path], label: str = "verificando") -> list[Path]:
     valid = []
-    for path in paths:
+    for i, path in enumerate(paths, 1):
         try:
             with Image.open(path) as img:
                 img.verify()
             valid.append(path)
         except (UnidentifiedImageError, OSError):
             continue
+        _progress(i, len(paths), label)
     return valid
 
 
 def _collect_cats_dogs() -> tuple[list[Path], list[Path]]:
     pet_images = RAW_DIR / "cats_dogs" / "PetImages"
-    cats = _valid_images(sorted((pet_images / "Cat").glob("*.jpg")))
-    dogs = _valid_images(sorted((pet_images / "Dog").glob("*.jpg")))
+    print("  Verificando imagenes de Cats&Dogs (descarta las corruptas, tarda unos minutos)...")
+    cats = _valid_images(sorted((pet_images / "Cat").glob("*.jpg")), "gatos verificados")
+    dogs = _valid_images(sorted((pet_images / "Dog").glob("*.jpg")), "perros verificados")
     return cats, dogs
 
 
@@ -80,6 +87,7 @@ def _collect_food101_candidates(quota: int, rng: random.Random) -> list[Path]:
 def _collect_stl10_non_pet_candidates(quota: int, rng: random.Random) -> list[Image.Image]:
     # STL10 trae "cat" y "dog" entre sus 10 clases; se excluyen para no contaminar la clase "ninguno"
     # con los mismos animales que el detector tiene que reconocer.
+    print("  Leyendo STL10 (excluye sus clases cat/dog)...", flush=True)
     all_items: list[Image.Image] = []
     for split in ("train", "test"):
         dataset = STL10(root=str(RAW_DIR / "stl10"), split=split, download=False)
@@ -103,6 +111,7 @@ def _collect_places365_candidates(quota: int, rng: random.Random) -> list[Image.
     indices = list(range(len(dataset)))
     rng.shuffle(indices)
 
+    print(f"  Leyendo hasta {quota} escenas de Places365...", flush=True)
     images: list[Image.Image] = []
     for idx in indices:
         if len(images) >= quota:
@@ -110,6 +119,7 @@ def _collect_places365_candidates(quota: int, rng: random.Random) -> list[Image.
         img, label = dataset[idx]
         if label not in excluded_idx:
             images.append(img)
+            _progress(len(images), quota, "escenas leidas")
     return images
 
 
@@ -136,8 +146,10 @@ def _save_one(img: Image.Image, out_dir: Path, index: int) -> None:
     img.convert("RGB").resize((IMG_SIZE, IMG_SIZE)).save(out_dir / f"{index:05d}.jpg", quality=90)
 
 
-def _save_resized(sources: list[NoneSource], out_dir: Path) -> int:
+def _save_resized(sources: list[NoneSource], out_dir: Path, label: str = "") -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
+    if sources:
+        print(f"  Guardando {len(sources)} imagenes en {label or out_dir.name}...", flush=True)
     saved = 0
     for source in sources:
         try:
@@ -162,7 +174,7 @@ def _materialize_splits(class_paths: dict[str, list[NoneSource]], out_root: Path
             split_paths = paths[offset:offset + count]
             offset += count
             out_dir = out_root / split / class_name
-            saved = _save_resized(split_paths, out_dir)
+            saved = _save_resized(split_paths, out_dir, f"{class_name}/{split}")
             distribution[class_name][split] = saved
     return distribution
 
