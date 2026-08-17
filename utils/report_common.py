@@ -12,21 +12,70 @@ import matplotlib
 matplotlib.use("Agg")  # EC2 no tiene display
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
-from sklearn.metrics import confusion_matrix, f1_score  # noqa: E402
+from sklearn.metrics import confusion_matrix, f1_score, precision_recall_fscore_support  # noqa: E402
 
 
 def metrics_from_predictions(labels: list[int], preds: list[int], class_names: list[str]) -> dict:
     labels_range = list(range(len(class_names)))
-    f1_per_class = f1_score(labels, preds, average=None, labels=labels_range, zero_division=0)
+    precision, recall, f1_per_class, support = precision_recall_fscore_support(
+        labels, preds, labels=labels_range, zero_division=0
+    )
     accuracy = float(sum(p == t for p, t in zip(preds, labels)) / len(labels))
     cm = confusion_matrix(labels, preds, labels=labels_range)
     return {
         "accuracy": accuracy,
         "f1_macro": float(f1_per_class.mean()),
         "f1_por_clase": {name: float(score) for name, score in zip(class_names, f1_per_class)},
+        "reporte_por_clase": {
+            name: {
+                "precision": float(p),
+                "recall": float(r),
+                "f1": float(f),
+                "n_imagenes_test": int(s),
+            }
+            for name, p, r, f, s in zip(class_names, precision, recall, f1_per_class, support)
+        },
+        "confusiones_mas_frecuentes": top_confusions(cm, class_names),
         "matriz_confusion": cm.tolist(),
         "clases": list(class_names),
     }
+
+
+def top_confusions(cm: np.ndarray, class_names: list[str], k: int = 10) -> list[dict]:
+    """Pares (real, predicho) mas confundidos fuera de la diagonal, como % de la clase real."""
+    cm = np.asarray(cm)
+    rows = []
+    totals = cm.sum(axis=1)
+    for i in range(len(class_names)):
+        for j in range(len(class_names)):
+            if i != j and cm[i, j] > 0 and totals[i] > 0:
+                rows.append({
+                    "real": class_names[i],
+                    "predicho": class_names[j],
+                    "cantidad": int(cm[i, j]),
+                    "porcentaje_de_la_clase": round(float(cm[i, j] / totals[i]), 4),
+                })
+    rows.sort(key=lambda r: r["cantidad"], reverse=True)
+    return rows[:k]
+
+
+def forced_mode_metrics(logits: np.ndarray, labels: list[int], class_names: list[str], none_class: str) -> dict:
+    """Modo forzado del detector: ignora la clase "ninguno" y clasifica solo perro vs gato.
+
+    Se evalua sobre las imagenes de test cuya etiqueta real NO es "ninguno" (requisito del
+    profesor: el modo forzado siempre responde una especie).
+    """
+    none_idx = class_names.index(none_class)
+    masked = np.asarray(logits, dtype=float).copy()
+    masked[:, none_idx] = -np.inf
+    forced_preds = masked.argmax(axis=1)
+
+    keep = [i for i, lbl in enumerate(labels) if lbl != none_idx]
+    kept_names = [n for n in class_names if n != none_class]
+    remap = {old: new for new, old in enumerate(i for i in range(len(class_names)) if i != none_idx)}
+    sub_preds = [remap[int(forced_preds[i])] for i in keep]
+    sub_labels = [remap[labels[i]] for i in keep]
+    return metrics_from_predictions(sub_labels, sub_preds, kept_names)
 
 
 def class_weight_values(counts: list[int]) -> list[float]:
@@ -36,22 +85,83 @@ def class_weight_values(counts: list[int]) -> list[float]:
     return [total / (n * c) for c in counts]
 
 
-def save_confusion_matrix_plot(cm: list[list[int]], class_names: list[str], out_path: Path) -> None:
-    cm_arr = np.array(cm)
+def save_confusion_matrix_plot(
+    cm: list[list[int]], class_names: list[str], out_path: Path, normalize: bool = False
+) -> None:
+    cm_arr = np.array(cm, dtype=float)
+    if normalize:
+        totals = cm_arr.sum(axis=1, keepdims=True)
+        cm_arr = np.divide(cm_arr, totals, out=np.zeros_like(cm_arr), where=totals > 0)
     size = max(5, len(class_names) * 0.6)
     fig, ax = plt.subplots(figsize=(size + 1, size))
-    im = ax.imshow(cm_arr, cmap="Blues")
+    im = ax.imshow(cm_arr, cmap="Blues", vmin=0, vmax=1 if normalize else None)
     ax.set_xticks(range(len(class_names)))
     ax.set_yticks(range(len(class_names)))
     ax.set_xticklabels(class_names, rotation=45, ha="right")
     ax.set_yticklabels(class_names)
     ax.set_xlabel("Prediccion")
     ax.set_ylabel("Real")
-    if len(class_names) <= 20:
+    ax.set_title("Matriz de confusion" + (" (normalizada por clase real)" if normalize else " (conteos)"))
+    if len(class_names) <= 25:
         for i in range(len(class_names)):
             for j in range(len(class_names)):
-                ax.text(j, i, cm_arr[i, j], ha="center", va="center", fontsize=7)
+                text = f"{cm_arr[i, j]:.2f}" if normalize else f"{int(cm_arr[i, j])}"
+                ax.text(j, i, text, ha="center", va="center", fontsize=6 if len(class_names) > 12 else 8)
     fig.colorbar(im)
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def save_training_curves_plot(history: list[dict], out_path: Path, title: str) -> None:
+    """Loss y accuracy por epoca (train vs val) + learning rate: diagnostico de un vistazo."""
+    if not history:
+        return
+    epochs = [h["epoch"] for h in history]
+    fig, (ax_loss, ax_acc) = plt.subplots(1, 2, figsize=(11, 4))
+
+    ax_loss.plot(epochs, [h["train_loss"] for h in history], label="train")
+    ax_loss.plot(epochs, [h["val_loss"] for h in history], label="val")
+    ax_loss.set_xlabel("Epoca")
+    ax_loss.set_ylabel("Loss")
+    ax_loss.legend(loc="upper right")
+    lrs = [h.get("lr") for h in history]
+    if all(lr is not None for lr in lrs):
+        ax_lr = ax_loss.twinx()
+        ax_lr.plot(epochs, lrs, color="gray", linestyle=":", alpha=0.7)
+        ax_lr.set_ylabel("LR", color="gray")
+        ax_lr.set_yscale("log")
+
+    ax_acc.plot(epochs, [h["train_acc"] for h in history], label="train")
+    ax_acc.plot(epochs, [h["val_acc"] for h in history], label="val")
+    ax_acc.set_xlabel("Epoca")
+    ax_acc.set_ylabel("Accuracy")
+    ax_acc.set_ylim(0, 1)
+    ax_acc.legend(loc="lower right")
+
+    fig.suptitle(title)
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def save_open_set_plot(open_set: dict, out_path: Path, title: str) -> None:
+    """Curva del modo "raza no identificada": que se gana y se pierde al mover el umbral."""
+    curva = open_set.get("curva", [])
+    if not curva:
+        return
+    thresholds = [r["umbral"] for r in curva]
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.plot(thresholds, [r["cobertura_conocidas"] for r in curva], marker="o", label="cobertura razas conocidas")
+    ax.plot(thresholds, [r["accuracy_aceptadas"] for r in curva], marker="s", label="accuracy de lo aceptado")
+    if "rechazo_desconocidas" in curva[0]:
+        ax.plot(thresholds, [r["rechazo_desconocidas"] for r in curva], marker="^", label="rechazo razas desconocidas")
+    ax.axvline(open_set["umbral_sugerido"], color="gray", linestyle="--", alpha=0.8, label="umbral sugerido")
+    ax.set_xlabel("Umbral de confianza")
+    ax.set_ylabel("Proporcion")
+    ax.set_ylim(0, 1.02)
+    ax.legend(loc="best", fontsize=8)
+    ax.set_title(title)
     fig.tight_layout()
     fig.savefig(out_path)
     plt.close(fig)

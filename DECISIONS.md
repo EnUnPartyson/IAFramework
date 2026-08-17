@@ -46,6 +46,8 @@ Registro de decisiones tomadas durante el proyecto y pendientes por resolver. Ac
 | 2026-08-13 | Fases largas (instalación de dependencias ~3GB, preparación de ~100k imágenes) ahora imprimen progreso; `run_all.sh` verifica al final del setup que torch y TF vean la GPU | Sin salida visible parecían colgadas por decenas de minutos. La verificación temprana de CUDA evita descubrir un problema de GPU recién horas después |
 | 2026-07-29 | Verificadas las 7 URLs de datasets (responden 200): Microsoft Cats&Dogs, COCO val2017 + anotaciones, Food101, STL10, Places365 (val_256 + filelist), Stanford Dogs, Oxford-IIIT Pet | Ninguna fuente requiere credenciales; la descarga en EC2 no debería tener sorpresas |
 
+| 2026-08-13 | Captura completa de métricas y gráficos en cada corrida: curvas de entrenamiento (loss/acc/LR por época), matriz de confusión en conteos **y** normalizada, precision/recall/F1/soporte por clase, top-10 de pares confundidos, curva del umbral de "raza no identificada", y gráfico de barras comparativo TF vs PyTorch | Todo sale idéntico de ambos motores vía `utils/report_common.py`. Además se agregó la métrica del **modo forzado** del detector (perro vs gato ignorando "ninguno"), que es requisito explícito del profesor y no se estaba midiendo |
+
 ## Pendientes por decidir
 
 - [x] ~~Tipo de instancia EC2 definitivo~~ — decidido 2026-07-23: **g4dn.xlarge on-demand** (~$0.53/h). El pipeline completo (~4-6h) cuesta ~$3 de los $200 de crédito; una CPU grande saldría más cara y tardaría días. Disco: 60-80GB gp3. Correr en tmux, hacer STOP (no terminate) al terminar

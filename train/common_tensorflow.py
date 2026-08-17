@@ -19,11 +19,14 @@ from utils.model_defs_tensorflow import HEAD_FLATTEN, HEAD_GAP, build_simple_cnn
 from utils.report_common import (  # noqa: E402
     class_weight_values,
     file_size_mb,
+    forced_mode_metrics,
     metrics_from_predictions,
     open_set_analysis,
     resolve_hparams,
     save_confusion_matrix_plot,
     save_metrics_json,
+    save_open_set_plot,
+    save_training_curves_plot,
 )
 from utils.transforms_tensorflow import AUG_BASE, AUG_STRONG, count_train_images_per_class, make_datasets  # noqa: E402
 
@@ -159,6 +162,12 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     labels = _labels_from_dataset(test_ds)
     test_metrics = metrics_from_predictions(labels, preds, class_names)
 
+    # modo forzado del detector (requisito del profesor): perro vs gato ignorando "ninguno"
+    forced_metrics = None
+    if "ninguno" in class_names:
+        forced_metrics = forced_mode_metrics(logits, labels, class_names, "ninguno")
+        print(f"[{task}/tensorflow] modo forzado (perro vs gato): accuracy={forced_metrics['accuracy']:.4f}")
+
     # modo "raza no identificada": umbral de confianza calibrado en validacion, evaluado
     # contra razas nunca vistas si prepare_data.py dejo la carpeta unknown/
     val_logits = model.predict(val_ds, verbose=0)
@@ -217,12 +226,22 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
         "test": test_metrics,
         "raza_no_identificada": open_set,
     }
+    if forced_metrics is not None:
+        report["test_modo_forzado"] = forced_metrics
     save_metrics_json(report, args.metrics_out)
+
+    plots_dir = args.metrics_out.parent
+    save_confusion_matrix_plot(
+        test_metrics["matriz_confusion"], class_names, plots_dir / f"{task}_tensorflow_confusion_matrix.png"
+    )
     save_confusion_matrix_plot(
         test_metrics["matriz_confusion"],
         class_names,
-        args.metrics_out.parent / f"{task}_tensorflow_confusion_matrix.png",
+        plots_dir / f"{task}_tensorflow_confusion_matrix_norm.png",
+        normalize=True,
     )
+    save_training_curves_plot(history, plots_dir / f"{task}_tensorflow_training_curves.png", f"{task} - TensorFlow")
+    save_open_set_plot(open_set, plots_dir / f"{task}_tensorflow_umbral_desconocidas.png", f"{task} - TensorFlow")
 
     print(f"[{task}/tensorflow] modelo: {args.model_out}")
     print(f"[{task}/tensorflow] metricas: {args.metrics_out}")

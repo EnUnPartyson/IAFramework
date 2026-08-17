@@ -11,6 +11,7 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -21,11 +22,14 @@ from utils.model_defs_pytorch import HEAD_FLATTEN, HEAD_GAP, SimpleCNN  # noqa: 
 from utils.report_common import (  # noqa: E402
     class_weight_values,
     file_size_mb,
+    forced_mode_metrics,
     metrics_from_predictions,
     open_set_analysis,
     resolve_hparams,
     save_confusion_matrix_plot,
     save_metrics_json,
+    save_open_set_plot,
+    save_training_curves_plot,
 )
 from utils.transforms_pytorch import AUG_BASE, AUG_STRONG, get_eval_transforms, get_train_transforms  # noqa: E402
 
@@ -160,6 +164,17 @@ def collect_probs(model: nn.Module, loader: DataLoader, device: torch.device) ->
 
 
 @torch.no_grad()
+def collect_logits(model: nn.Module, loader: DataLoader, device: torch.device) -> tuple[np.ndarray, list[int]]:
+    """Logits crudos + etiquetas: base para metricas de test, modo forzado y umbrales."""
+    model.eval()
+    chunks, labels_out = [], []
+    for images, labels in loader:
+        chunks.append(model(images.to(device)).cpu().numpy())
+        labels_out.extend(labels.tolist())
+    return np.concatenate(chunks), labels_out
+
+
+@torch.no_grad()
 def evaluate(model: nn.Module, loader: DataLoader, device: torch.device, class_names: list[str]) -> dict:
     model.eval()
     all_preds, all_labels = [], []
@@ -243,7 +258,14 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
 
     checkpoint = torch.load(args.model_out, map_location=device)
     model.load_state_dict(checkpoint["state_dict"])
-    test_metrics = evaluate(model, test_loader, device, class_names)
+    test_logits, test_labels = collect_logits(model, test_loader, device)
+    test_metrics = metrics_from_predictions(test_labels, test_logits.argmax(axis=1).tolist(), class_names)
+
+    # modo forzado del detector (requisito del profesor): perro vs gato ignorando "ninguno"
+    forced_metrics = None
+    if "ninguno" in class_names:
+        forced_metrics = forced_mode_metrics(test_logits, test_labels, class_names, "ninguno")
+        print(f"[{task}/pytorch] modo forzado (perro vs gato): accuracy={forced_metrics['accuracy']:.4f}")
 
     # modo "raza no identificada": umbral de confianza calibrado en validacion, evaluado
     # contra razas nunca vistas si prepare_data.py dejo la carpeta unknown/
@@ -284,12 +306,22 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
         "test": test_metrics,
         "raza_no_identificada": open_set,
     }
+    if forced_metrics is not None:
+        report["test_modo_forzado"] = forced_metrics
     save_metrics_json(report, args.metrics_out)
+
+    plots_dir = args.metrics_out.parent
+    save_confusion_matrix_plot(
+        test_metrics["matriz_confusion"], class_names, plots_dir / f"{task}_pytorch_confusion_matrix.png"
+    )
     save_confusion_matrix_plot(
         test_metrics["matriz_confusion"],
         class_names,
-        args.metrics_out.parent / f"{task}_pytorch_confusion_matrix.png",
+        plots_dir / f"{task}_pytorch_confusion_matrix_norm.png",
+        normalize=True,
     )
+    save_training_curves_plot(history, plots_dir / f"{task}_pytorch_training_curves.png", f"{task} - PyTorch")
+    save_open_set_plot(open_set, plots_dir / f"{task}_pytorch_umbral_desconocidas.png", f"{task} - PyTorch")
 
     print(f"[{task}/pytorch] modelo: {args.model_out}")
     print(f"[{task}/pytorch] metricas: {args.metrics_out}")
