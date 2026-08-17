@@ -83,3 +83,19 @@ def predict_forced(logits: torch.Tensor) -> torch.Tensor:
     masked = logits.clone()
     masked[:, NONE_CLASS_IDX] = float("-inf")
     return masked.argmax(dim=1)
+
+
+UNKNOWN_IDX = -1
+
+
+def predict_with_unknown(logits: torch.Tensor, threshold: float) -> torch.Tensor:
+    """Modo "raza no identificada": devuelve UNKNOWN_IDX si la confianza no llega al umbral.
+
+    El umbral sugerido para cada modelo queda en metrics/<tarea>_<fw>_metrics.json
+    (seccion "raza_no_identificada"), calculado sobre validacion.
+    """
+    probs = torch.softmax(logits, dim=1)
+    maxprob, idx = probs.max(dim=1)
+    idx = idx.clone()
+    idx[maxprob < threshold] = UNKNOWN_IDX
+    return idx

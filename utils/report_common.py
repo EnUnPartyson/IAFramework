@@ -67,6 +67,37 @@ def file_size_mb(path: Path) -> float:
     return round(path.stat().st_size / (1024 * 1024), 2)
 
 
+def open_set_analysis(
+    val_maxprob: list[float],
+    val_correct: list[bool],
+    unknown_maxprob: list[float] | None = None,
+) -> dict:
+    """Modo "raza no identificada": elige el umbral de confianza sobre validacion.
+
+    Si la probabilidad maxima del softmax queda debajo del umbral, la prediccion se
+    reporta como "no identificada". El umbral sugerido maximiza (accuracy de lo aceptado
+    x cobertura) + tasa de rechazo de razas nunca vistas, cuando hay muestra de estas.
+    """
+    rows = []
+    for t in [x / 100 for x in range(30, 96, 5)]:
+        accepted = [p >= t for p in val_maxprob]
+        n_accepted = sum(accepted)
+        coverage = n_accepted / len(val_maxprob)
+        acc_accepted = (
+            sum(c for c, a in zip(val_correct, accepted) if a) / n_accepted if n_accepted else 0.0
+        )
+        row = {"umbral": t, "cobertura_conocidas": round(coverage, 4), "accuracy_aceptadas": round(acc_accepted, 4)}
+        if unknown_maxprob:
+            row["rechazo_desconocidas"] = round(sum(p < t for p in unknown_maxprob) / len(unknown_maxprob), 4)
+        rows.append(row)
+
+    def score(row: dict) -> float:
+        return row["accuracy_aceptadas"] * row["cobertura_conocidas"] + row.get("rechazo_desconocidas", 0.0)
+
+    best = max(rows, key=score)
+    return {"umbral_sugerido": best["umbral"], "en_umbral_sugerido": best, "curva": rows}
+
+
 # hiperparametros que Optuna puede buscar y que ambos frameworks aceptan por igual
 TUNABLE_HPARAMS = ("lr", "batch_size", "dropout", "weight_decay")
 HPARAM_DEFAULTS = {"lr": 1e-3, "batch_size": 64, "dropout": 0.4, "weight_decay": 1e-4}

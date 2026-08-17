@@ -21,6 +21,11 @@ COCO_ANNOTATIONS_URL = "http://images.cocodataset.org/annotations/annotations_tr
 STANFORD_DOGS_DIR = RAW_DIR / "stanford_dogs"
 STANFORD_DOGS_URL = "http://vision.stanford.edu/aditya86/ImageNetDogs/images.tar"
 
+# Modelo 2 (raza perro): Tsinghua Dogs (~70k imagenes, 130 razas), version baja resolucion.
+# Triplica los datos por raza al combinarse con Stanford/Oxford. Descarga directa sin credenciales.
+TSINGHUA_DOGS_DIR = RAW_DIR / "tsinghua_dogs"
+TSINGHUA_DOGS_URL = "https://cloud.tsinghua.edu.cn/f/80013ef29c5f42728fc8/?dl=1"
+
 # Modelo 3 (raza gato): Oxford-IIIT Pet, descarga directa sin credenciales.
 # Los archivos con inicial mayuscula son gatos (12 razas); los de minuscula son perros y se ignoran.
 OXFORD_PETS_DIR = RAW_DIR / "oxford_pets"
@@ -81,6 +86,17 @@ def download_stanford_dogs() -> None:
     download_and_extract_archive(STANFORD_DOGS_URL, download_root=str(STANFORD_DOGS_DIR))
 
 
+def download_tsinghua_dogs() -> None:
+    # el zip trae carpetas por raza estilo "nXXXXXXX-nombre_de_raza", igual que Stanford
+    if any(TSINGHUA_DOGS_DIR.rglob("n*-*")):
+        print(f"tsinghua_dogs ya existe en {TSINGHUA_DOGS_DIR}, se omite descarga")
+        return
+    TSINGHUA_DOGS_DIR.mkdir(parents=True, exist_ok=True)
+    download_and_extract_archive(
+        TSINGHUA_DOGS_URL, download_root=str(TSINGHUA_DOGS_DIR), filename="low-resolution.zip"
+    )
+
+
 def download_oxford_pets() -> None:
     if (OXFORD_PETS_DIR / "images").exists():
         print(f"oxford_pets ya existe en {OXFORD_PETS_DIR}, se omite descarga")
@@ -103,6 +119,8 @@ def main() -> None:
     download_places365()
     print("Descargando Stanford Dogs (Modelo 2: raza perro)...")
     download_stanford_dogs()
+    print("Descargando Tsinghua Dogs (Modelo 2: mas datos de raza perro, ~2.6GB)...")
+    download_tsinghua_dogs()
     print("Descargando Oxford-IIIT Pet (Modelo 3: raza gato)...")
     download_oxford_pets()
     print("Descarga completa.")

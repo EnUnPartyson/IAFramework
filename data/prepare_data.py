@@ -24,12 +24,15 @@ SPLIT_RATIOS = {"train": 0.70, "val": 0.15, "test": 0.15}
 NONE_SOURCE_WEIGHTS = {"food101": 1 / 3, "stl10": 1 / 3, "places365": 1 / 3}
 PLACES365_EXCLUDE_KEYWORDS = ("dog", "cat", "kennel", "pet", "veterinar")
 
-# Razas: subset para que el entrenamiento desde cero sea viable (ver DECISIONS.md).
-# Se eligen las N razas con MAS imagenes disponibles: con pocas clases y muchos ejemplos
-# por clase, una CNN desde cero tiene chance; con muchas clases y ~130 ejemplos cada una,
-# no (ver la primera corrida: 15 razas -> 25% de accuracy).
-DOG_BREEDS_TOP_N = 6
-CAT_BREEDS_TOP_N = 6
+# Razas: se eligen las N con MAS imagenes disponibles. Perros combina 3 fuentes
+# (Stanford + Oxford + Tsinghua, ~600+ imgs/raza en el top); gatos solo tiene Oxford
+# (~200 imgs/raza), por eso el numero de clases viable es distinto.
+DOG_BREEDS_TOP_N = 20
+CAT_BREEDS_TOP_N = 12
+
+# Razas fuera del top-N: se guarda una muestra como "desconocidas" para evaluar el
+# modo "raza no identificada" (umbral de confianza) contra razas nunca vistas.
+UNKNOWN_SAMPLE_SIZE = 300
 
 
 def _progress(done: int, total: int, label: str, every: int = 2000) -> None:
@@ -220,7 +223,8 @@ def _oxford_breeds(want_cats: bool) -> dict[str, list[Path]]:
 
 def _top_breeds_to_splits(breeds: dict[str, list[Path]], top_n: int, out_name: str) -> dict[str, dict[str, int]]:
     rng = random.Random(SEED)
-    top = sorted(breeds.items(), key=lambda kv: len(kv[1]), reverse=True)[:top_n]
+    ranked = sorted(breeds.items(), key=lambda kv: len(kv[1]), reverse=True)
+    top, excluded = ranked[:top_n], ranked[top_n:]
     print(f"  Razas elegidas (las {top_n} con mas imagenes): " + ", ".join(f"{n} ({len(p)})" for n, p in top))
 
     class_paths: dict[str, list[NoneSource]] = {}
@@ -228,27 +232,47 @@ def _top_breeds_to_splits(breeds: dict[str, list[Path]], top_n: int, out_name: s
         valid = _valid_images(paths, f"{breed_name} verificadas")
         rng.shuffle(valid)
         class_paths[breed_name] = list(valid)
-    return _materialize_splits(class_paths, PROCESSED_ROOT / out_name)
+    distribution = _materialize_splits(class_paths, PROCESSED_ROOT / out_name)
+
+    # muestra de razas excluidas -> "desconocidas": evalua el modo "raza no identificada"
+    if excluded:
+        pool: list[Path] = [p for _, paths in excluded for p in paths]
+        rng.shuffle(pool)
+        sample = _valid_images(pool[: UNKNOWN_SAMPLE_SIZE * 2], "desconocidas verificadas")[:UNKNOWN_SAMPLE_SIZE]
+        saved = _save_resized(sample, PROCESSED_ROOT / out_name / "unknown" / "desconocida", f"{out_name}/unknown")
+        distribution["_desconocidas"] = {"unknown": saved}
+        print(f"  Muestra de razas desconocidas ({len(excluded)} razas excluidas): {saved} imagenes")
+    return distribution
+
+
+def _add_imagenet_style_dirs(breeds: dict[str, list[Path]], root: Path) -> int:
+    """Suma carpetas estilo "nXXXXXXXX-nombre_de_raza" (Stanford y Tsinghua usan ese formato)."""
+    found = 0
+    for breed_dir in sorted(root.rglob("n*-*")):
+        if not breed_dir.is_dir():
+            continue
+        images = sorted(breed_dir.glob("*.jpg")) + sorted(breed_dir.glob("*.jpeg"))
+        if not images:
+            continue
+        breed_name = breed_dir.name.split("-", 1)[1].lower().replace(" ", "_")
+        breeds.setdefault(breed_name, []).extend(images)
+        found += 1
+    return found
 
 
 def prepare_dog_breed_data() -> dict[str, dict[str, int]]:
-    # Stanford Dogs (carpetas "n02085620-Chihuahua") mas las razas de perro de Oxford-IIIT Pet:
-    # varias razas estan en ambos datasets, y sumarlas casi duplica los ejemplos de esas clases.
-    stanford_root = RAW_DIR / "stanford_dogs" / "Images"
-
+    # Tres fuentes combinadas por nombre de raza normalizado: Stanford (~20k), Tsinghua (~70k)
+    # y las razas de perro de Oxford-IIIT Pet (~5k). Las razas presentes en varias fuentes
+    # suman todos sus ejemplos, por eso el top-N queda con ~600+ imagenes por raza.
     breeds: dict[str, list[Path]] = {}
-    for breed_dir in sorted(p for p in stanford_root.iterdir() if p.is_dir()):
-        breed_name = breed_dir.name.split("-", 1)[1].lower().replace(" ", "_")
-        breeds.setdefault(breed_name, []).extend(sorted(breed_dir.glob("*.jpg")))
+    n_stanford = _add_imagenet_style_dirs(breeds, RAW_DIR / "stanford_dogs" / "Images")
+    n_tsinghua = _add_imagenet_style_dirs(breeds, RAW_DIR / "tsinghua_dogs")
+    print(f"  Carpetas de raza encontradas: Stanford={n_stanford}, Tsinghua={n_tsinghua}")
+    if n_tsinghua == 0:
+        print("  AVISO: no se encontro Tsinghua Dogs; corre data/download_dataset.py para sumarlo")
 
-    merged = 0
     for breed_name, paths in _oxford_breeds(want_cats=False).items():
-        if breed_name in breeds:
-            breeds[breed_name].extend(paths)
-            merged += 1
-        else:
-            breeds[breed_name] = paths
-    print(f"  Razas de perro presentes en Stanford y Oxford (datos combinados): {merged}")
+        breeds.setdefault(breed_name, []).extend(paths)
 
     return _top_breeds_to_splits(breeds, DOG_BREEDS_TOP_N, "dog_breed")
 

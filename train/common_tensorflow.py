@@ -15,26 +15,46 @@ import numpy as np
 import tensorflow as tf
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from utils.model_defs_tensorflow import HEAD_FLATTEN, HEAD_GAP, build_simple_cnn  # noqa: E402
+from utils.model_defs_tensorflow import HEAD_FLATTEN, HEAD_GAP, build_simple_cnn, softmax  # noqa: E402
 from utils.report_common import (  # noqa: E402
     class_weight_values,
     file_size_mb,
     metrics_from_predictions,
+    open_set_analysis,
     resolve_hparams,
     save_confusion_matrix_plot,
     save_metrics_json,
 )
-from utils.transforms_tensorflow import count_train_images_per_class, make_datasets  # noqa: E402
+from utils.transforms_tensorflow import AUG_BASE, AUG_STRONG, count_train_images_per_class, make_datasets  # noqa: E402
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCHEDULER_PATIENCE = 2
 SCHEDULER_FACTOR = 0.5
 
 
-def build_arg_parser(task: str, default_epochs: int = 30, default_head: str = HEAD_FLATTEN) -> argparse.ArgumentParser:
+def build_arg_parser(
+    task: str,
+    default_epochs: int = 30,
+    default_head: str = HEAD_FLATTEN,
+    default_aug: str = AUG_BASE,
+    default_mixup: float = 0.0,
+    default_patience: int = 6,
+) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=f"Entrena el modelo '{task}' en TensorFlow/Keras")
     parser.add_argument("--data-dir", type=Path, default=ROOT_DIR / "data" / "processed" / task)
     parser.add_argument("--epochs", type=int, default=default_epochs)
+    parser.add_argument(
+        "--aug",
+        choices=(AUG_BASE, AUG_STRONG),
+        default=default_aug,
+        help="augmentation: 'base' o 'strong' (RandAugment + RandomErasing, para datasets chicos)",
+    )
+    parser.add_argument(
+        "--mixup",
+        type=float,
+        default=default_mixup,
+        help="alpha de MixUp (0 = apagado); mezcla pares de imagenes y etiquetas en el batch",
+    )
     parser.add_argument(
         "--head",
         choices=(HEAD_FLATTEN, HEAD_GAP),
@@ -53,14 +73,19 @@ def build_arg_parser(task: str, default_epochs: int = 30, default_head: str = HE
         default=None,
         help="JSON con los mejores hiperparametros (los mismos que la version PyTorch, para comparar parejo)",
     )
-    parser.add_argument("--patience", type=int, default=6, help="early stopping: epocas sin mejorar val_accuracy")
+    parser.add_argument(
+        "--patience", type=int, default=default_patience, help="early stopping: epocas sin mejorar val_accuracy"
+    )
     parser.add_argument("--model-out", type=Path, default=ROOT_DIR / "models" / f"{task}_tensorflow.keras")
     parser.add_argument("--metrics-out", type=Path, default=ROOT_DIR / "metrics" / f"{task}_tensorflow_metrics.json")
     return parser
 
 
 def _labels_from_dataset(dataset: tf.data.Dataset) -> list[int]:
-    return np.concatenate([labels.numpy() for _, labels in dataset]).tolist()
+    labels = np.concatenate([lbl.numpy() for _, lbl in dataset])
+    if labels.ndim == 2:  # one-hot (cuando mixup esta activo los splits van en one-hot)
+        labels = labels.argmax(axis=1)
+    return labels.tolist()
 
 
 def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str, ...] | None = None) -> dict:
@@ -70,19 +95,29 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     hp = resolve_hparams(args, args.hparams_from)
     print(f"[{task}/tensorflow] hiperparametros: {hp}")
 
-    train_ds, val_ds, test_ds, class_names = make_datasets(args.data_dir, hp["batch_size"])
+    train_ds, val_ds, test_ds, class_names = make_datasets(
+        args.data_dir, hp["batch_size"], aug=args.aug, mixup=args.mixup
+    )
     if expected_classes is not None and tuple(class_names) != tuple(expected_classes):
         raise ValueError(f"Clases en {args.data_dir} ({class_names}) != esperadas ({expected_classes})")
 
     _, class_counts = count_train_images_per_class(args.data_dir)
     print(f"[{task}/tensorflow] clases ({len(class_names)}): {dict(zip(class_names, class_counts))}")
-    class_weight = {i: w for i, w in enumerate(class_weight_values(class_counts))}
+
+    if args.mixup > 0:
+        # con etiquetas blandas (mixup) Keras no soporta class_weight; las razas estan
+        # aproximadamente balanceadas asi que no se pierde nada relevante
+        class_weight = None
+        loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
+    else:
+        class_weight = {i: w for i, w in enumerate(class_weight_values(class_counts))}
+        loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
     model = build_simple_cnn(num_classes=len(class_names), dropout=hp["dropout"], head=args.head)
     print(f"[{task}/tensorflow] cabezal={args.head}, {model.count_params():,} parametros")
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=hp["lr"], weight_decay=hp["weight_decay"]),
-        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        loss=loss,
         metrics=["accuracy"],
     )
 
@@ -124,6 +159,22 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     labels = _labels_from_dataset(test_ds)
     test_metrics = metrics_from_predictions(labels, preds, class_names)
 
+    # modo "raza no identificada": umbral de confianza calibrado en validacion, evaluado
+    # contra razas nunca vistas si prepare_data.py dejo la carpeta unknown/
+    val_logits = model.predict(val_ds, verbose=0)
+    val_probs = softmax(val_logits)
+    val_labels = _labels_from_dataset(val_ds)
+    val_correct = [p == t for p, t in zip(val_probs.argmax(axis=1).tolist(), val_labels)]
+    unknown_dir = args.data_dir / "unknown"
+    unknown_maxprob: list[float] | None = None
+    if unknown_dir.exists():
+        unknown_ds = tf.keras.utils.image_dataset_from_directory(
+            unknown_dir, label_mode="int", image_size=(128, 128), batch_size=hp["batch_size"], shuffle=False
+        )
+        unknown_maxprob = softmax(model.predict(unknown_ds, verbose=0)).max(axis=1).tolist()
+    open_set = open_set_analysis(val_probs.max(axis=1).tolist(), val_correct, unknown_maxprob)
+    print(f"[{task}/tensorflow] raza no identificada: {open_set['en_umbral_sugerido']}")
+
     epochs_run = len(fit_history.history["loss"])
     history = [
         {
@@ -154,6 +205,8 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
             "scheduler": f"ReduceLROnPlateau(factor={SCHEDULER_FACTOR}, patience={SCHEDULER_PATIENCE})",
             "head": args.head,
             "n_parametros": int(model.count_params()),
+            "aug": args.aug,
+            "mixup_alpha": args.mixup,
         },
         "distribucion_train": dict(zip(class_names, class_counts)),
         "tiempo_entrenamiento_seg": round(training_time, 1),
@@ -162,6 +215,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
         "tamano_archivo_modelo_mb": file_size_mb(args.model_out),
         "historia": history,
         "test": test_metrics,
+        "raza_no_identificada": open_set,
     }
     save_metrics_json(report, args.metrics_out)
     save_confusion_matrix_plot(

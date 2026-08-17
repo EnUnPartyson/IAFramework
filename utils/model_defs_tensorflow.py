@@ -66,3 +66,23 @@ def predict_forced(logits: np.ndarray) -> np.ndarray:
     masked = logits.copy()
     masked[:, NONE_CLASS_IDX] = -np.inf
     return masked.argmax(axis=1)
+
+
+UNKNOWN_IDX = -1
+
+
+def softmax(logits: np.ndarray) -> np.ndarray:
+    exp = np.exp(logits - logits.max(axis=1, keepdims=True))
+    return exp / exp.sum(axis=1, keepdims=True)
+
+
+def predict_with_unknown(logits: np.ndarray, threshold: float) -> np.ndarray:
+    """Modo "raza no identificada": devuelve UNKNOWN_IDX si la confianza no llega al umbral.
+
+    El umbral sugerido para cada modelo queda en metrics/<tarea>_<fw>_metrics.json
+    (seccion "raza_no_identificada"), calculado sobre validacion.
+    """
+    probs = softmax(logits)
+    idx = probs.argmax(axis=1)
+    idx[probs.max(axis=1) < threshold] = UNKNOWN_IDX
+    return idx

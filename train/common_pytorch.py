@@ -22,21 +22,41 @@ from utils.report_common import (  # noqa: E402
     class_weight_values,
     file_size_mb,
     metrics_from_predictions,
+    open_set_analysis,
     resolve_hparams,
     save_confusion_matrix_plot,
     save_metrics_json,
 )
-from utils.transforms_pytorch import get_eval_transforms, get_train_transforms  # noqa: E402
+from utils.transforms_pytorch import AUG_BASE, AUG_STRONG, get_eval_transforms, get_train_transforms  # noqa: E402
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCHEDULER_PATIENCE = 2
 SCHEDULER_FACTOR = 0.5
 
 
-def build_arg_parser(task: str, default_epochs: int = 30, default_head: str = HEAD_FLATTEN) -> argparse.ArgumentParser:
+def build_arg_parser(
+    task: str,
+    default_epochs: int = 30,
+    default_head: str = HEAD_FLATTEN,
+    default_aug: str = AUG_BASE,
+    default_mixup: float = 0.0,
+    default_patience: int = 6,
+) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=f"Entrena el modelo '{task}' en PyTorch")
     parser.add_argument("--data-dir", type=Path, default=ROOT_DIR / "data" / "processed" / task)
     parser.add_argument("--epochs", type=int, default=default_epochs)
+    parser.add_argument(
+        "--aug",
+        choices=(AUG_BASE, AUG_STRONG),
+        default=default_aug,
+        help="augmentation: 'base' o 'strong' (RandAugment + RandomErasing, para datasets chicos)",
+    )
+    parser.add_argument(
+        "--mixup",
+        type=float,
+        default=default_mixup,
+        help="alpha de MixUp (0 = apagado); mezcla pares de imagenes y etiquetas en el batch",
+    )
     parser.add_argument(
         "--head",
         choices=(HEAD_FLATTEN, HEAD_GAP),
@@ -55,16 +75,18 @@ def build_arg_parser(task: str, default_epochs: int = 30, default_head: str = HE
         default=None,
         help="JSON generado por tune_detector_pytorch.py con los mejores hiperparametros",
     )
-    parser.add_argument("--patience", type=int, default=6, help="early stopping: epocas sin mejorar val_accuracy")
+    parser.add_argument(
+        "--patience", type=int, default=default_patience, help="early stopping: epocas sin mejorar val_accuracy"
+    )
     parser.add_argument("--model-out", type=Path, default=ROOT_DIR / "models" / f"{task}_pytorch.pt")
     parser.add_argument("--metrics-out", type=Path, default=ROOT_DIR / "metrics" / f"{task}_pytorch_metrics.json")
     return parser
 
 
 def build_dataloaders(
-    data_dir: Path, batch_size: int
+    data_dir: Path, batch_size: int, aug: str = AUG_BASE
 ) -> tuple[DataLoader, DataLoader, DataLoader, list[str], list[int]]:
-    train_ds = ImageFolder(data_dir / "train", transform=get_train_transforms())
+    train_ds = ImageFolder(data_dir / "train", transform=get_train_transforms(aug=aug))
     val_ds = ImageFolder(data_dir / "val", transform=get_eval_transforms())
     test_ds = ImageFolder(data_dir / "test", transform=get_eval_transforms())
 
@@ -89,24 +111,52 @@ def run_epoch(
     criterion: nn.Module,
     device: torch.device,
     optimizer: torch.optim.Optimizer | None = None,
+    mixup: float = 0.0,
 ) -> tuple[float, float]:
     is_train = optimizer is not None
     model.train(is_train)
+    beta = torch.distributions.Beta(mixup, mixup) if (is_train and mixup > 0) else None
     total_loss, correct, total = 0.0, 0, 0
     with torch.set_grad_enabled(is_train):
         for images, labels in loader:
             images, labels = images.to(device), labels.to(device)
             if is_train:
                 optimizer.zero_grad()
-            logits = model(images)
-            loss = criterion(logits, labels)
+
+            if beta is not None:
+                # MixUp: mezcla cada imagen con otra del batch; la loss se reparte entre
+                # ambas etiquetas. Mismo algoritmo que la version TF (transforms_tensorflow).
+                lam = beta.sample().item()
+                perm = torch.randperm(images.size(0), device=device)
+                mixed = lam * images + (1.0 - lam) * images[perm]
+                logits = model(mixed)
+                loss = lam * criterion(logits, labels) + (1.0 - lam) * criterion(logits, labels[perm])
+            else:
+                logits = model(images)
+                loss = criterion(logits, labels)
+
             if is_train:
                 loss.backward()
                 optimizer.step()
             total_loss += loss.item() * images.size(0)
+            # con mixup el accuracy de train es aproximado (se compara contra la etiqueta dominante)
             correct += (logits.argmax(dim=1) == labels).sum().item()
             total += images.size(0)
     return total_loss / total, correct / total
+
+
+@torch.no_grad()
+def collect_probs(model: nn.Module, loader: DataLoader, device: torch.device) -> tuple[list[float], list[int], list[int]]:
+    """Devuelve (probabilidad maxima softmax, prediccion, etiqueta real) por imagen."""
+    model.eval()
+    maxprobs, preds, labels_out = [], [], []
+    for images, labels in loader:
+        probs = torch.softmax(model(images.to(device)), dim=1)
+        p, idx = probs.max(dim=1)
+        maxprobs.extend(p.cpu().tolist())
+        preds.extend(idx.cpu().tolist())
+        labels_out.extend(labels.tolist())
+    return maxprobs, preds, labels_out
 
 
 @torch.no_grad()
@@ -129,7 +179,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     print(f"[{task}/pytorch] hiperparametros: {hp}")
 
     train_loader, val_loader, test_loader, class_names, class_counts = build_dataloaders(
-        args.data_dir, hp["batch_size"]
+        args.data_dir, hp["batch_size"], aug=args.aug
     )
     if expected_classes is not None and tuple(class_names) != tuple(expected_classes):
         raise ValueError(f"Clases en {args.data_dir} ({class_names}) != esperadas ({expected_classes})")
@@ -153,7 +203,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     epochs_run = 0
     for epoch in range(1, args.epochs + 1):
         epochs_run = epoch
-        train_loss, train_acc = run_epoch(model, train_loader, criterion, device, optimizer)
+        train_loss, train_acc = run_epoch(model, train_loader, criterion, device, optimizer, mixup=args.mixup)
         val_loss, val_acc = run_epoch(model, val_loader, criterion, device)
         scheduler.step(val_acc)
         current_lr = optimizer.param_groups[0]["lr"]
@@ -195,6 +245,19 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     model.load_state_dict(checkpoint["state_dict"])
     test_metrics = evaluate(model, test_loader, device, class_names)
 
+    # modo "raza no identificada": umbral de confianza calibrado en validacion, evaluado
+    # contra razas nunca vistas si prepare_data.py dejo la carpeta unknown/
+    val_maxprob, val_preds, val_labels = collect_probs(model, val_loader, device)
+    val_correct = [p == t for p, t in zip(val_preds, val_labels)]
+    unknown_dir = args.data_dir / "unknown"
+    unknown_maxprob: list[float] | None = None
+    if unknown_dir.exists():
+        unknown_ds = ImageFolder(unknown_dir, transform=get_eval_transforms())
+        unknown_loader = DataLoader(unknown_ds, batch_size=hp["batch_size"], shuffle=False, num_workers=2)
+        unknown_maxprob, _, _ = collect_probs(model, unknown_loader, device)
+    open_set = open_set_analysis(val_maxprob, val_correct, unknown_maxprob)
+    print(f"[{task}/pytorch] raza no identificada: {open_set['en_umbral_sugerido']}")
+
     report = {
         "framework": "pytorch",
         "tarea": task,
@@ -210,6 +273,8 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
             "scheduler": f"ReduceLROnPlateau(factor={SCHEDULER_FACTOR}, patience={SCHEDULER_PATIENCE})",
             "head": args.head,
             "n_parametros": n_params,
+            "aug": args.aug,
+            "mixup_alpha": args.mixup,
         },
         "distribucion_train": dict(zip(class_names, class_counts)),
         "tiempo_entrenamiento_seg": round(training_time, 1),
@@ -217,6 +282,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
         "tamano_pesos_mb": file_size_mb(args.model_out),
         "historia": history,
         "test": test_metrics,
+        "raza_no_identificada": open_set,
     }
     save_metrics_json(report, args.metrics_out)
     save_confusion_matrix_plot(
