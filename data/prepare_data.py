@@ -14,7 +14,10 @@ RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 PROCESSED_ROOT = Path(__file__).resolve().parent.parent / "data" / "processed"
 METRICS_DIR = Path(__file__).resolve().parent.parent / "metrics"
 
-IMG_SIZE = 128
+IMG_SIZE = 128  # detector: entrena y evalua a 128
+# razas: se entrena a 160 (fine-grained necesita mas detalle); se guarda a 176 para que
+# RandomResizedCrop tenga margen real de recorte sin re-ampliar
+BREED_STORED_SIZE = 176
 SEED = 42
 # Desbalance intencional del Modelo 1 (ver DECISIONS.md)
 PROPORTIONS = {"perro": 0.35, "gato": 0.35, "ninguno": 0.30}
@@ -148,29 +151,31 @@ def _split_counts(total: int) -> dict[str, int]:
     return {"train": train, "val": val, "test": test}
 
 
-def _save_one(img: Image.Image, out_dir: Path, index: int) -> None:
-    img.convert("RGB").resize((IMG_SIZE, IMG_SIZE)).save(out_dir / f"{index:05d}.jpg", quality=90)
+def _save_one(img: Image.Image, out_dir: Path, index: int, size: int) -> None:
+    img.convert("RGB").resize((size, size)).save(out_dir / f"{index:05d}.jpg", quality=90)
 
 
-def _save_resized(sources: list[NoneSource], out_dir: Path, label: str = "") -> int:
+def _save_resized(sources: list[NoneSource], out_dir: Path, label: str = "", size: int = IMG_SIZE) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     if sources:
-        print(f"  Guardando {len(sources)} imagenes en {label or out_dir.name}...", flush=True)
+        print(f"  Guardando {len(sources)} imagenes ({size}px) en {label or out_dir.name}...", flush=True)
     saved = 0
     for source in sources:
         try:
             if isinstance(source, Path):
                 with Image.open(source) as img:
-                    _save_one(img, out_dir, saved)
+                    _save_one(img, out_dir, saved, size)
             else:
-                _save_one(source, out_dir, saved)
+                _save_one(source, out_dir, saved, size)
             saved += 1
         except (UnidentifiedImageError, OSError):
             continue
     return saved
 
 
-def _materialize_splits(class_paths: dict[str, list[NoneSource]], out_root: Path) -> dict[str, dict[str, int]]:
+def _materialize_splits(
+    class_paths: dict[str, list[NoneSource]], out_root: Path, size: int = IMG_SIZE
+) -> dict[str, dict[str, int]]:
     distribution: dict[str, dict[str, int]] = {}
     for class_name, paths in class_paths.items():
         counts = _split_counts(len(paths))
@@ -180,7 +185,7 @@ def _materialize_splits(class_paths: dict[str, list[NoneSource]], out_root: Path
             split_paths = paths[offset:offset + count]
             offset += count
             out_dir = out_root / split / class_name
-            saved = _save_resized(split_paths, out_dir, f"{class_name}/{split}")
+            saved = _save_resized(split_paths, out_dir, f"{class_name}/{split}", size=size)
             distribution[class_name][split] = saved
     return distribution
 
@@ -232,14 +237,19 @@ def _top_breeds_to_splits(breeds: dict[str, list[Path]], top_n: int, out_name: s
         valid = _valid_images(paths, f"{breed_name} verificadas")
         rng.shuffle(valid)
         class_paths[breed_name] = list(valid)
-    distribution = _materialize_splits(class_paths, PROCESSED_ROOT / out_name)
+    distribution = _materialize_splits(class_paths, PROCESSED_ROOT / out_name, size=BREED_STORED_SIZE)
 
     # muestra de razas excluidas -> "desconocidas": evalua el modo "raza no identificada"
     if excluded:
         pool: list[Path] = [p for _, paths in excluded for p in paths]
         rng.shuffle(pool)
         sample = _valid_images(pool[: UNKNOWN_SAMPLE_SIZE * 2], "desconocidas verificadas")[:UNKNOWN_SAMPLE_SIZE]
-        saved = _save_resized(sample, PROCESSED_ROOT / out_name / "unknown" / "desconocida", f"{out_name}/unknown")
+        saved = _save_resized(
+            sample,
+            PROCESSED_ROOT / out_name / "unknown" / "desconocida",
+            f"{out_name}/unknown",
+            size=BREED_STORED_SIZE,
+        )
         distribution["_desconocidas"] = {"unknown": saved}
         print(f"  Muestra de razas desconocidas ({len(excluded)} razas excluidas): {saved} imagenes")
     return distribution

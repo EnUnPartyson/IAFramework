@@ -2,6 +2,9 @@
 
 Corre sobre PyTorch por velocidad, pero el JSON resultante lo consumen los dos
 frameworks (--hparams-from), para que la comparacion TF vs PyTorch no quede sesgada.
+Cada trial entrena con LA MISMA receta que el entrenamiento final (cabezal, resolucion,
+profundidad, augmentation y mixup de TASK_DEFAULTS): tunear con una receta distinta
+encuentra hiperparametros que no transfieren.
 """
 from __future__ import annotations
 
@@ -22,16 +25,21 @@ from train.common_pytorch import (  # noqa: E402
     evaluate,
     run_epoch,
 )
-from utils.model_defs_pytorch import HEAD_FLATTEN, HEAD_GAP, SimpleCNN  # noqa: E402
+from utils.model_defs_pytorch import SimpleCNN  # noqa: E402
+from utils.report_common import TASK_DEFAULTS  # noqa: E402
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
-# epocas cortas por trial: alcanza para comparar hiperparametros entre si, la corrida
-# final completa se hace aparte con train_<modelo>_<framework>.py usando el JSON
-TUNE_EPOCHS = 8
+# epocas cortas por trial: alcanza para comparar hiperparametros entre si, la corrida final
+# completa se hace aparte. Las razas usan mas epocas porque con mixup + augmentation fuerte
+# las primeras epocas son ruidosas (y sus datasets chicos hacen la epoca barata).
+TUNE_EPOCHS = {"detector": 8, "dog_breed": 14, "cat_breed": 14}
 
 
 def objective(trial: optuna.Trial, args: argparse.Namespace, device: torch.device) -> float:
+    recipe = TASK_DEFAULTS[args.task]
+    tune_epochs = TUNE_EPOCHS[args.task]
+
     lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
     batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
     dropout = trial.suggest_float("dropout", 0.2, 0.6)
@@ -43,20 +51,30 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, device: torch.devic
         flush=True,
     )
 
-    train_loader, val_loader, _, class_names, class_counts = build_dataloaders(args.data_dir, batch_size)
-    model = SimpleCNN(num_classes=len(class_names), dropout=dropout, head=args.head).to(device)
+    train_loader, val_loader, _, class_names, class_counts = build_dataloaders(
+        args.data_dir, batch_size, aug=recipe["aug"], img_size=recipe["img_size"]
+    )
+    model = SimpleCNN(
+        num_classes=len(class_names),
+        dropout=dropout,
+        head=recipe["head"],
+        blocks=recipe["blocks"],
+        img_size=recipe["img_size"],
+    ).to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights_from_counts(class_counts, device))
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     best_val_f1 = -1.0
-    for epoch in range(TUNE_EPOCHS):
+    for epoch in range(tune_epochs):
         epoch_start = time.time()
-        train_loss, train_acc = run_epoch(model, train_loader, criterion, device, optimizer)
+        train_loss, train_acc = run_epoch(
+            model, train_loader, criterion, device, optimizer, mixup=recipe["mixup"]
+        )
         val_metrics = evaluate(model, val_loader, device, class_names)
         best_val_f1 = max(best_val_f1, val_metrics["f1_macro"])
         # train_acc muy por encima de val_acc = el modelo esta memorizando
         print(
-            f"  epoca {epoch + 1}/{TUNE_EPOCHS}: train_acc={train_acc:.4f} "
+            f"  epoca {epoch + 1}/{tune_epochs}: train_acc={train_acc:.4f} "
             f"val_acc={val_metrics['accuracy']:.4f} val_f1={val_metrics['f1_macro']:.4f} "
             f"({time.time() - epoch_start:.0f}s)",
             flush=True,
@@ -72,33 +90,29 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, device: torch.devic
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Busqueda de hiperparametros con Optuna (PyTorch)")
-    parser.add_argument("task", choices=("detector", "dog_breed", "cat_breed"))
+    parser.add_argument("task", choices=tuple(TASK_DEFAULTS))
     parser.add_argument("--data-dir", type=Path, default=None)
-    parser.add_argument("--head", choices=(HEAD_FLATTEN, HEAD_GAP), default=None)
     parser.add_argument("--trials", type=int, default=20)
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
 
-    # mismos defaults que los scripts de entrenamiento: el detector tiene datos de sobra
-    # para el cabezal grande, las razas no
-    if args.head is None:
-        args.head = HEAD_FLATTEN if args.task == "detector" else HEAD_GAP
     if args.data_dir is None:
         args.data_dir = ROOT_DIR / "data" / "processed" / args.task
     if args.out is None:
         args.out = ROOT_DIR / "metrics" / f"{args.task}_best_hparams.json"
 
+    recipe = TASK_DEFAULTS[args.task]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Tarea: {args.task} | cabezal: {args.head} | device: {device}")
+    print(f"Tarea: {args.task} | receta: {recipe} | device: {device}")
     print(
-        f"Optuna: {args.trials} trials x {TUNE_EPOCHS} epocas cada uno. "
+        f"Optuna: {args.trials} trials x {TUNE_EPOCHS[args.task]} epocas cada uno. "
         "Los trials que van peor que la mediana se cortan antes (MedianPruner)."
     )
 
     study = optuna.create_study(direction="maximize", pruner=optuna.pruners.MedianPruner())
     study.optimize(lambda trial: objective(trial, args, device), n_trials=args.trials)
 
-    print(f"\nMejor val_f1_macro ({TUNE_EPOCHS} epocas por trial): {study.best_value:.4f}")
+    print(f"\nMejor val_f1_macro ({TUNE_EPOCHS[args.task]} epocas por trial): {study.best_value:.4f}")
     print(f"Mejores hiperparametros: {study.best_params}")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -106,8 +120,8 @@ def main() -> None:
         json.dump(
             {
                 "tarea": args.task,
-                "head": args.head,
-                "tune_epochs": TUNE_EPOCHS,
+                "receta": recipe,
+                "tune_epochs": TUNE_EPOCHS[args.task],
                 "trials": args.trials,
                 "best_val_f1_macro": study.best_value,
                 "best_params": study.best_params,

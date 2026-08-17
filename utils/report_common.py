@@ -208,6 +208,25 @@ def open_set_analysis(
     return {"umbral_sugerido": best["umbral"], "en_umbral_sugerido": best, "curva": rows}
 
 
+# Receta por tarea, compartida por ambos frameworks Y por la busqueda de Optuna, para que
+# nunca diverjan: el detector tiene datos de sobra (cabezal grande, augmentation suave);
+# las razas son fine-grained con pocos datos (mas resolucion, red mas profunda, cabezal GAP,
+# augmentation fuerte y MixUp).
+TASK_DEFAULTS = {
+    "detector": {
+        "head": "flatten", "aug": "base", "mixup": 0.0,
+        "img_size": 128, "blocks": 4, "epochs": 30, "patience": 6,
+    },
+    "dog_breed": {
+        "head": "gap", "aug": "strong", "mixup": 0.2,
+        "img_size": 160, "blocks": 5, "epochs": 80, "patience": 12,
+    },
+    "cat_breed": {
+        "head": "gap", "aug": "strong", "mixup": 0.2,
+        "img_size": 160, "blocks": 5, "epochs": 80, "patience": 12,
+    },
+}
+
 # hiperparametros que Optuna puede buscar y que ambos frameworks aceptan por igual
 TUNABLE_HPARAMS = ("lr", "batch_size", "dropout", "weight_decay")
 HPARAM_DEFAULTS = {"lr": 1e-3, "batch_size": 64, "dropout": 0.4, "weight_decay": 1e-4}

@@ -17,49 +17,57 @@ CLASS_NAMES = DETECTOR_CLASS_NAMES
 HEAD_FLATTEN = "flatten"
 HEAD_GAP = "gap"
 
+# filtros por bloque conv; blocks=N usa los primeros N
+BLOCK_FILTERS = (32, 64, 128, 256, 512)
+
 
 class SimpleCNN(nn.Module):
-    """CNN desde cero usada por los 3 modelos; cambian num_classes y el cabezal.
+    """CNN desde cero usada por los 3 modelos; cambian num_classes, cabezal y profundidad.
 
-    head="flatten": Flatten -> Linear(256*8*8, 256). ~4.2M parametros solo en esa capa,
-        el 91% del modelo. Va bien cuando hay muchos datos (detector: ~25k imagenes).
-    head="gap": GlobalAveragePooling -> Linear(256, 256). ~66k parametros, 60x menos.
-        Necesario en las razas (~1.9k imagenes), donde el cabezal grande memoriza.
+    head="flatten": Flatten -> Linear grande. Mucha capacidad: va bien cuando hay muchos
+        datos (detector, ~25k imagenes). Depende de img_size.
+    head="gap": GlobalAveragePooling -> Linear chico. 60x menos parametros en el cabezal:
+        necesario en las razas, donde el cabezal grande memoriza. Independiente de img_size.
+    blocks=5 agrega un bloque de 512 filtros: mas profundidad de features para tareas
+        fine-grained (razas); el detector queda en 4.
     """
 
-    def __init__(self, num_classes: int, dropout: float = 0.4, head: str = HEAD_FLATTEN) -> None:
+    def __init__(
+        self,
+        num_classes: int,
+        dropout: float = 0.4,
+        head: str = HEAD_FLATTEN,
+        blocks: int = 4,
+        img_size: int = 128,
+    ) -> None:
         super().__init__()
         if head not in (HEAD_FLATTEN, HEAD_GAP):
             raise ValueError(f"head debe ser '{HEAD_FLATTEN}' o '{HEAD_GAP}', no {head!r}")
+        if not 3 <= blocks <= len(BLOCK_FILTERS):
+            raise ValueError(f"blocks debe estar entre 3 y {len(BLOCK_FILTERS)}, no {blocks}")
+        if img_size % (2 ** blocks) != 0:
+            raise ValueError(f"img_size={img_size} no es divisible por 2^{blocks}")
         self.head = head
-        self.features = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
 
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
+        layers: list[nn.Module] = []
+        in_ch = 3
+        for out_ch in BLOCK_FILTERS[:blocks]:
+            layers += [
+                nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1),
+                nn.BatchNorm2d(out_ch),
+                nn.ReLU(inplace=True),
+                nn.MaxPool2d(2),
+            ]
+            in_ch = out_ch
+        self.features = nn.Sequential(*layers)
 
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-        )
         if head == HEAD_FLATTEN:
-            # 4 maxpools sobre input 128x128 -> mapa 8x8; si IMG_SIZE cambia, ajustar tambien aca
+            feature_map = img_size // (2 ** blocks)
             first_layer: nn.Module = nn.Flatten()
-            in_features = 256 * 8 * 8
+            in_features = in_ch * feature_map * feature_map
         else:
             first_layer = nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten())
-            in_features = 256  # independiente del tamano de imagen
+            in_features = in_ch  # independiente del tamano de imagen
 
         self.classifier = nn.Sequential(
             first_layer,

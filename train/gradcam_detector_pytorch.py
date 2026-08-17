@@ -20,8 +20,12 @@ DEFAULT_MODEL_PATH = ROOT_DIR / "models" / "detector_pytorch.pt"
 DEFAULT_DATA_DIR = ROOT_DIR / "data" / "processed" / "detector" / "val"
 DEFAULT_OUT_DIR = ROOT_DIR / "metrics" / "gradcam"
 
-# ultimo ReLU de "features" (activacion 8x8 antes del pooling final) -- capa estandar para Grad-CAM
-TARGET_LAYER_IDX = 14
+def _last_relu_index(model: SimpleCNN) -> int:
+    # ultimo ReLU de "features" (activacion previa al pooling final): capa estandar para
+    # Grad-CAM. Se busca dinamicamente porque la cantidad de bloques es configurable.
+    import torch.nn as nn
+
+    return max(i for i, layer in enumerate(model.features) if isinstance(layer, nn.ReLU))
 
 
 class GradCAM:
@@ -29,7 +33,7 @@ class GradCAM:
         self.model = model
         self.activations: torch.Tensor | None = None
         self.gradients: torch.Tensor | None = None
-        target_layer = model.features[TARGET_LAYER_IDX]
+        target_layer = model.features[_last_relu_index(model)]
         # el hook de gradiente va sobre el tensor de salida (no register_full_backward_hook
         # sobre el modulo): los ReLU inplace de la red rompen los backward hooks de modulo
         target_layer.register_forward_hook(self._save_activations)
@@ -88,7 +92,12 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(args.model_path, map_location=device)
     class_names = checkpoint.get("class_names", list(CLASS_NAMES))
-    model = SimpleCNN(num_classes=len(class_names)).to(device)
+    model = SimpleCNN(
+        num_classes=len(class_names),
+        head=checkpoint.get("head", "flatten"),
+        blocks=checkpoint.get("blocks", 4),
+        img_size=checkpoint.get("img_size", 128),
+    ).to(device)
     model.load_state_dict(checkpoint["state_dict"])
     model.eval()
 

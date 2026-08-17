@@ -20,6 +20,7 @@ from torchvision.datasets import ImageFolder
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from utils.model_defs_pytorch import HEAD_FLATTEN, HEAD_GAP, SimpleCNN  # noqa: E402
 from utils.report_common import (  # noqa: E402
+    TASK_DEFAULTS,
     class_weight_values,
     file_size_mb,
     forced_mode_metrics,
@@ -38,35 +39,33 @@ SCHEDULER_PATIENCE = 2
 SCHEDULER_FACTOR = 0.5
 
 
-def build_arg_parser(
-    task: str,
-    default_epochs: int = 30,
-    default_head: str = HEAD_FLATTEN,
-    default_aug: str = AUG_BASE,
-    default_mixup: float = 0.0,
-    default_patience: int = 6,
-) -> argparse.ArgumentParser:
+def build_arg_parser(task: str) -> argparse.ArgumentParser:
+    # la receta por tarea (cabezal, augmentation, mixup, resolucion, profundidad, epocas)
+    # vive en TASK_DEFAULTS, compartida con el motor TF y con Optuna para que nunca diverjan
+    d = TASK_DEFAULTS[task]
     parser = argparse.ArgumentParser(description=f"Entrena el modelo '{task}' en PyTorch")
     parser.add_argument("--data-dir", type=Path, default=ROOT_DIR / "data" / "processed" / task)
-    parser.add_argument("--epochs", type=int, default=default_epochs)
+    parser.add_argument("--epochs", type=int, default=d["epochs"])
     parser.add_argument(
         "--aug",
         choices=(AUG_BASE, AUG_STRONG),
-        default=default_aug,
+        default=d["aug"],
         help="augmentation: 'base' o 'strong' (RandAugment + RandomErasing, para datasets chicos)",
     )
     parser.add_argument(
         "--mixup",
         type=float,
-        default=default_mixup,
+        default=d["mixup"],
         help="alpha de MixUp (0 = apagado); mezcla pares de imagenes y etiquetas en el batch",
     )
     parser.add_argument(
         "--head",
         choices=(HEAD_FLATTEN, HEAD_GAP),
-        default=default_head,
+        default=d["head"],
         help="cabezal: 'flatten' (mas capacidad, necesita muchos datos) o 'gap' (60x menos parametros)",
     )
+    parser.add_argument("--img-size", type=int, default=d["img_size"], help="resolucion de entrenamiento/eval")
+    parser.add_argument("--blocks", type=int, default=d["blocks"], help="cantidad de bloques convolucionales (3-5)")
     # default None a proposito: distingue "no lo paso" de "lo paso igual al default",
     # necesario para que --hparams-from no pise un valor explicito (ver resolve_hparams)
     parser.add_argument("--batch-size", type=int, default=None)
@@ -77,10 +76,10 @@ def build_arg_parser(
         "--hparams-from",
         type=Path,
         default=None,
-        help="JSON generado por tune_detector_pytorch.py con los mejores hiperparametros",
+        help="JSON generado por tune_pytorch.py con los mejores hiperparametros",
     )
     parser.add_argument(
-        "--patience", type=int, default=default_patience, help="early stopping: epocas sin mejorar val_accuracy"
+        "--patience", type=int, default=d["patience"], help="early stopping: epocas sin mejorar val_accuracy"
     )
     parser.add_argument("--model-out", type=Path, default=ROOT_DIR / "models" / f"{task}_pytorch.pt")
     parser.add_argument("--metrics-out", type=Path, default=ROOT_DIR / "metrics" / f"{task}_pytorch_metrics.json")
@@ -88,11 +87,11 @@ def build_arg_parser(
 
 
 def build_dataloaders(
-    data_dir: Path, batch_size: int, aug: str = AUG_BASE
+    data_dir: Path, batch_size: int, aug: str = AUG_BASE, img_size: int = 128
 ) -> tuple[DataLoader, DataLoader, DataLoader, list[str], list[int]]:
-    train_ds = ImageFolder(data_dir / "train", transform=get_train_transforms(aug=aug))
-    val_ds = ImageFolder(data_dir / "val", transform=get_eval_transforms())
-    test_ds = ImageFolder(data_dir / "test", transform=get_eval_transforms())
+    train_ds = ImageFolder(data_dir / "train", transform=get_train_transforms(img_size=img_size, aug=aug))
+    val_ds = ImageFolder(data_dir / "val", transform=get_eval_transforms(img_size=img_size))
+    test_ds = ImageFolder(data_dir / "test", transform=get_eval_transforms(img_size=img_size))
 
     class_names = list(train_ds.classes)
     class_counts = [0] * len(class_names)
@@ -194,15 +193,21 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     print(f"[{task}/pytorch] hiperparametros: {hp}")
 
     train_loader, val_loader, test_loader, class_names, class_counts = build_dataloaders(
-        args.data_dir, hp["batch_size"], aug=args.aug
+        args.data_dir, hp["batch_size"], aug=args.aug, img_size=args.img_size
     )
     if expected_classes is not None and tuple(class_names) != tuple(expected_classes):
         raise ValueError(f"Clases en {args.data_dir} ({class_names}) != esperadas ({expected_classes})")
     print(f"[{task}/pytorch] clases ({len(class_names)}): {dict(zip(class_names, class_counts))}")
 
-    model = SimpleCNN(num_classes=len(class_names), dropout=hp["dropout"], head=args.head).to(device)
+    model = SimpleCNN(
+        num_classes=len(class_names),
+        dropout=hp["dropout"],
+        head=args.head,
+        blocks=args.blocks,
+        img_size=args.img_size,
+    ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"[{task}/pytorch] cabezal={args.head}, {n_params:,} parametros")
+    print(f"[{task}/pytorch] cabezal={args.head}, {args.blocks} bloques, {args.img_size}px, {n_params:,} parametros")
     criterion = nn.CrossEntropyLoss(weight=class_weights_from_counts(class_counts, device))
     optimizer = torch.optim.Adam(model.parameters(), lr=hp["lr"], weight_decay=hp["weight_decay"])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -245,6 +250,8 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
                     "class_names": class_names,
                     "dropout": hp["dropout"],
                     "head": args.head,
+                    "blocks": args.blocks,
+                    "img_size": args.img_size,
                 },
                 args.model_out,
             )
@@ -274,7 +281,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     unknown_dir = args.data_dir / "unknown"
     unknown_maxprob: list[float] | None = None
     if unknown_dir.exists():
-        unknown_ds = ImageFolder(unknown_dir, transform=get_eval_transforms())
+        unknown_ds = ImageFolder(unknown_dir, transform=get_eval_transforms(img_size=args.img_size))
         unknown_loader = DataLoader(unknown_ds, batch_size=hp["batch_size"], shuffle=False, num_workers=2)
         unknown_maxprob, _, _ = collect_probs(model, unknown_loader, device)
     open_set = open_set_analysis(val_maxprob, val_correct, unknown_maxprob)
@@ -294,6 +301,8 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
             "early_stopping_paciencia": args.patience,
             "scheduler": f"ReduceLROnPlateau(factor={SCHEDULER_FACTOR}, patience={SCHEDULER_PATIENCE})",
             "head": args.head,
+            "blocks": args.blocks,
+            "img_size": args.img_size,
             "n_parametros": n_params,
             "aug": args.aug,
             "mixup_alpha": args.mixup,

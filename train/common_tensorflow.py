@@ -17,6 +17,7 @@ import tensorflow as tf
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from utils.model_defs_tensorflow import HEAD_FLATTEN, HEAD_GAP, build_simple_cnn, softmax  # noqa: E402
 from utils.report_common import (  # noqa: E402
+    TASK_DEFAULTS,
     class_weight_values,
     file_size_mb,
     forced_mode_metrics,
@@ -35,35 +36,33 @@ SCHEDULER_PATIENCE = 2
 SCHEDULER_FACTOR = 0.5
 
 
-def build_arg_parser(
-    task: str,
-    default_epochs: int = 30,
-    default_head: str = HEAD_FLATTEN,
-    default_aug: str = AUG_BASE,
-    default_mixup: float = 0.0,
-    default_patience: int = 6,
-) -> argparse.ArgumentParser:
+def build_arg_parser(task: str) -> argparse.ArgumentParser:
+    # la receta por tarea (cabezal, augmentation, mixup, resolucion, profundidad, epocas)
+    # vive en TASK_DEFAULTS, compartida con el motor PyTorch y con Optuna para que nunca diverjan
+    d = TASK_DEFAULTS[task]
     parser = argparse.ArgumentParser(description=f"Entrena el modelo '{task}' en TensorFlow/Keras")
     parser.add_argument("--data-dir", type=Path, default=ROOT_DIR / "data" / "processed" / task)
-    parser.add_argument("--epochs", type=int, default=default_epochs)
+    parser.add_argument("--epochs", type=int, default=d["epochs"])
     parser.add_argument(
         "--aug",
         choices=(AUG_BASE, AUG_STRONG),
-        default=default_aug,
+        default=d["aug"],
         help="augmentation: 'base' o 'strong' (RandAugment + RandomErasing, para datasets chicos)",
     )
     parser.add_argument(
         "--mixup",
         type=float,
-        default=default_mixup,
+        default=d["mixup"],
         help="alpha de MixUp (0 = apagado); mezcla pares de imagenes y etiquetas en el batch",
     )
     parser.add_argument(
         "--head",
         choices=(HEAD_FLATTEN, HEAD_GAP),
-        default=default_head,
+        default=d["head"],
         help="cabezal: 'flatten' (mas capacidad, necesita muchos datos) o 'gap' (60x menos parametros)",
     )
+    parser.add_argument("--img-size", type=int, default=d["img_size"], help="resolucion de entrenamiento/eval")
+    parser.add_argument("--blocks", type=int, default=d["blocks"], help="cantidad de bloques convolucionales (3-5)")
     # default None a proposito: distingue "no lo paso" de "lo paso igual al default",
     # necesario para que --hparams-from no pise un valor explicito (ver resolve_hparams)
     parser.add_argument("--batch-size", type=int, default=None)
@@ -77,7 +76,7 @@ def build_arg_parser(
         help="JSON con los mejores hiperparametros (los mismos que la version PyTorch, para comparar parejo)",
     )
     parser.add_argument(
-        "--patience", type=int, default=default_patience, help="early stopping: epocas sin mejorar val_accuracy"
+        "--patience", type=int, default=d["patience"], help="early stopping: epocas sin mejorar val_accuracy"
     )
     parser.add_argument("--model-out", type=Path, default=ROOT_DIR / "models" / f"{task}_tensorflow.keras")
     parser.add_argument("--metrics-out", type=Path, default=ROOT_DIR / "metrics" / f"{task}_tensorflow_metrics.json")
@@ -99,7 +98,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     print(f"[{task}/tensorflow] hiperparametros: {hp}")
 
     train_ds, val_ds, test_ds, class_names = make_datasets(
-        args.data_dir, hp["batch_size"], aug=args.aug, mixup=args.mixup
+        args.data_dir, hp["batch_size"], img_size=args.img_size, aug=args.aug, mixup=args.mixup
     )
     if expected_classes is not None and tuple(class_names) != tuple(expected_classes):
         raise ValueError(f"Clases en {args.data_dir} ({class_names}) != esperadas ({expected_classes})")
@@ -116,8 +115,17 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
         class_weight = {i: w for i, w in enumerate(class_weight_values(class_counts))}
         loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
-    model = build_simple_cnn(num_classes=len(class_names), dropout=hp["dropout"], head=args.head)
-    print(f"[{task}/tensorflow] cabezal={args.head}, {model.count_params():,} parametros")
+    model = build_simple_cnn(
+        num_classes=len(class_names),
+        dropout=hp["dropout"],
+        img_size=args.img_size,
+        head=args.head,
+        blocks=args.blocks,
+    )
+    print(
+        f"[{task}/tensorflow] cabezal={args.head}, {args.blocks} bloques, {args.img_size}px, "
+        f"{model.count_params():,} parametros"
+    )
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=hp["lr"], weight_decay=hp["weight_decay"]),
         loss=loss,
@@ -150,7 +158,13 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     # el .keras (y save_weights sobre un modelo compilado) incluye el estado del optimizador Adam
     # (~3x el tamano de los pesos); para que "tamano_pesos_mb" sea comparable con el state_dict de
     # PyTorch se copian los pesos a un modelo fresco sin compilar y se mide ese archivo
-    export_model = build_simple_cnn(num_classes=len(class_names), dropout=hp["dropout"], head=args.head)
+    export_model = build_simple_cnn(
+        num_classes=len(class_names),
+        dropout=hp["dropout"],
+        img_size=args.img_size,
+        head=args.head,
+        blocks=args.blocks,
+    )
     export_model.set_weights(model.get_weights())
     weights_tmp = args.model_out.parent / (args.model_out.stem + ".weights.h5")
     export_model.save_weights(weights_tmp)
@@ -178,7 +192,11 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     unknown_maxprob: list[float] | None = None
     if unknown_dir.exists():
         unknown_ds = tf.keras.utils.image_dataset_from_directory(
-            unknown_dir, label_mode="int", image_size=(128, 128), batch_size=hp["batch_size"], shuffle=False
+            unknown_dir,
+            label_mode="int",
+            image_size=(args.img_size, args.img_size),
+            batch_size=hp["batch_size"],
+            shuffle=False,
         )
         unknown_maxprob = softmax(model.predict(unknown_ds, verbose=0)).max(axis=1).tolist()
     open_set = open_set_analysis(val_probs.max(axis=1).tolist(), val_correct, unknown_maxprob)
@@ -213,6 +231,8 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
             "early_stopping_paciencia": args.patience,
             "scheduler": f"ReduceLROnPlateau(factor={SCHEDULER_FACTOR}, patience={SCHEDULER_PATIENCE})",
             "head": args.head,
+            "blocks": args.blocks,
+            "img_size": args.img_size,
             "n_parametros": int(model.count_params()),
             "aug": args.aug,
             "mixup_alpha": args.mixup,
