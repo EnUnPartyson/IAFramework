@@ -15,7 +15,7 @@ import numpy as np
 import tensorflow as tf
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from utils.model_defs_tensorflow import build_simple_cnn  # noqa: E402
+from utils.model_defs_tensorflow import HEAD_FLATTEN, HEAD_GAP, build_simple_cnn  # noqa: E402
 from utils.report_common import (  # noqa: E402
     class_weight_values,
     file_size_mb,
@@ -31,10 +31,16 @@ SCHEDULER_PATIENCE = 2
 SCHEDULER_FACTOR = 0.5
 
 
-def build_arg_parser(task: str, default_epochs: int = 30) -> argparse.ArgumentParser:
+def build_arg_parser(task: str, default_epochs: int = 30, default_head: str = HEAD_FLATTEN) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=f"Entrena el modelo '{task}' en TensorFlow/Keras")
     parser.add_argument("--data-dir", type=Path, default=ROOT_DIR / "data" / "processed" / task)
     parser.add_argument("--epochs", type=int, default=default_epochs)
+    parser.add_argument(
+        "--head",
+        choices=(HEAD_FLATTEN, HEAD_GAP),
+        default=default_head,
+        help="cabezal: 'flatten' (mas capacidad, necesita muchos datos) o 'gap' (60x menos parametros)",
+    )
     # default None a proposito: distingue "no lo paso" de "lo paso igual al default",
     # necesario para que --hparams-from no pise un valor explicito (ver resolve_hparams)
     parser.add_argument("--batch-size", type=int, default=None)
@@ -72,7 +78,8 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     print(f"[{task}/tensorflow] clases ({len(class_names)}): {dict(zip(class_names, class_counts))}")
     class_weight = {i: w for i, w in enumerate(class_weight_values(class_counts))}
 
-    model = build_simple_cnn(num_classes=len(class_names), dropout=hp["dropout"])
+    model = build_simple_cnn(num_classes=len(class_names), dropout=hp["dropout"], head=args.head)
+    print(f"[{task}/tensorflow] cabezal={args.head}, {model.count_params():,} parametros")
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=hp["lr"], weight_decay=hp["weight_decay"]),
         loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -105,7 +112,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     # el .keras (y save_weights sobre un modelo compilado) incluye el estado del optimizador Adam
     # (~3x el tamano de los pesos); para que "tamano_pesos_mb" sea comparable con el state_dict de
     # PyTorch se copian los pesos a un modelo fresco sin compilar y se mide ese archivo
-    export_model = build_simple_cnn(num_classes=len(class_names), dropout=hp["dropout"])
+    export_model = build_simple_cnn(num_classes=len(class_names), dropout=hp["dropout"], head=args.head)
     export_model.set_weights(model.get_weights())
     weights_tmp = args.model_out.parent / (args.model_out.stem + ".weights.h5")
     export_model.save_weights(weights_tmp)
@@ -145,6 +152,8 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
             "hparams_origen": str(args.hparams_from) if args.hparams_from else "defaults/CLI",
             "early_stopping_paciencia": args.patience,
             "scheduler": f"ReduceLROnPlateau(factor={SCHEDULER_FACTOR}, patience={SCHEDULER_PATIENCE})",
+            "head": args.head,
+            "n_parametros": int(model.count_params()),
         },
         "distribucion_train": dict(zip(class_names, class_counts)),
         "tiempo_entrenamiento_seg": round(training_time, 1),

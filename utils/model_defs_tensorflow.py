@@ -15,8 +15,19 @@ NONE_CLASS_IDX = DETECTOR_CLASS_NAMES.index("ninguno")
 
 IMG_SIZE = 128
 
+HEAD_FLATTEN = "flatten"
+HEAD_GAP = "gap"
 
-def build_simple_cnn(num_classes: int, dropout: float = 0.4, img_size: int = IMG_SIZE) -> tf.keras.Model:
+
+def build_simple_cnn(
+    num_classes: int, dropout: float = 0.4, img_size: int = IMG_SIZE, head: str = HEAD_FLATTEN
+) -> tf.keras.Model:
+    """Espejo de model_defs_pytorch.SimpleCNN, incluido el cabezal (ver docstring alla)."""
+    if head not in (HEAD_FLATTEN, HEAD_GAP):
+        raise ValueError(f"head debe ser '{HEAD_FLATTEN}' o '{HEAD_GAP}', no {head!r}")
+
+    head_layer = layers.Flatten() if head == HEAD_FLATTEN else layers.GlobalAveragePooling2D()
+
     model = tf.keras.Sequential([
         layers.Input(shape=(img_size, img_size, 3)),
         layers.Rescaling(1.0 / 127.5, offset=-1.0),
@@ -41,7 +52,7 @@ def build_simple_cnn(num_classes: int, dropout: float = 0.4, img_size: int = IMG
         layers.ReLU(),
         layers.MaxPooling2D(2),
 
-        layers.Flatten(),
+        head_layer,
         layers.Dense(256),
         layers.ReLU(),
         layers.Dropout(dropout),

@@ -14,11 +14,24 @@ NONE_CLASS_IDX = DETECTOR_CLASS_NAMES.index("ninguno")
 CLASS_NAMES = DETECTOR_CLASS_NAMES
 
 
-class SimpleCNN(nn.Module):
-    """CNN desde cero usada por los 3 modelos (detector y ambas razas); solo cambia num_classes."""
+HEAD_FLATTEN = "flatten"
+HEAD_GAP = "gap"
 
-    def __init__(self, num_classes: int, dropout: float = 0.4) -> None:
+
+class SimpleCNN(nn.Module):
+    """CNN desde cero usada por los 3 modelos; cambian num_classes y el cabezal.
+
+    head="flatten": Flatten -> Linear(256*8*8, 256). ~4.2M parametros solo en esa capa,
+        el 91% del modelo. Va bien cuando hay muchos datos (detector: ~25k imagenes).
+    head="gap": GlobalAveragePooling -> Linear(256, 256). ~66k parametros, 60x menos.
+        Necesario en las razas (~1.9k imagenes), donde el cabezal grande memoriza.
+    """
+
+    def __init__(self, num_classes: int, dropout: float = 0.4, head: str = HEAD_FLATTEN) -> None:
         super().__init__()
+        if head not in (HEAD_FLATTEN, HEAD_GAP):
+            raise ValueError(f"head debe ser '{HEAD_FLATTEN}' o '{HEAD_GAP}', no {head!r}")
+        self.head = head
         self.features = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
@@ -40,10 +53,17 @@ class SimpleCNN(nn.Module):
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2),
         )
-        # 4 maxpools sobre input 128x128 -> mapa 8x8; si IMG_SIZE cambia, ajustar tambien aca
+        if head == HEAD_FLATTEN:
+            # 4 maxpools sobre input 128x128 -> mapa 8x8; si IMG_SIZE cambia, ajustar tambien aca
+            first_layer: nn.Module = nn.Flatten()
+            in_features = 256 * 8 * 8
+        else:
+            first_layer = nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten())
+            in_features = 256  # independiente del tamano de imagen
+
         self.classifier = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(256 * 8 * 8, 256),
+            first_layer,
+            nn.Linear(in_features, 256),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout),
             nn.Linear(256, num_classes),

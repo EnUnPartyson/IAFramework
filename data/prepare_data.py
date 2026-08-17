@@ -25,8 +25,11 @@ NONE_SOURCE_WEIGHTS = {"food101": 1 / 3, "stl10": 1 / 3, "places365": 1 / 3}
 PLACES365_EXCLUDE_KEYWORDS = ("dog", "cat", "kennel", "pet", "veterinar")
 
 # Razas: subset para que el entrenamiento desde cero sea viable (ver DECISIONS.md).
-# Perro: top-N razas de Stanford Dogs por cantidad de imagenes. Gato: las 12 de Oxford-IIIT Pet.
-DOG_BREEDS_TOP_N = 15
+# Se eligen las N razas con MAS imagenes disponibles: con pocas clases y muchos ejemplos
+# por clase, una CNN desde cero tiene chance; con muchas clases y ~130 ejemplos cada una,
+# no (ver la primera corrida: 15 razas -> 25% de accuracy).
+DOG_BREEDS_TOP_N = 6
+CAT_BREEDS_TOP_N = 6
 
 
 def _progress(done: int, total: int, label: str, every: int = 2000) -> None:
@@ -204,43 +207,54 @@ def prepare_detector_data() -> dict[str, dict[str, int]]:
     return _materialize_splits(class_paths, PROCESSED_ROOT / "detector")
 
 
-def prepare_dog_breed_data() -> dict[str, dict[str, int]]:
-    # Stanford Dogs: carpetas tipo "n02085620-Chihuahua"; el nombre de la raza va despues del guion.
-    rng = random.Random(SEED)
-    images_root = RAW_DIR / "stanford_dogs" / "Images"
-
+def _oxford_breeds(want_cats: bool) -> dict[str, list[Path]]:
+    """Oxford-IIIT Pet: archivos "Raza_123.jpg"; inicial mayuscula = gato, minuscula = perro."""
+    images_root = RAW_DIR / "oxford_pets" / "images"
     breeds: dict[str, list[Path]] = {}
-    for breed_dir in sorted(p for p in images_root.iterdir() if p.is_dir()):
-        breed_name = breed_dir.name.split("-", 1)[1].lower().replace(" ", "_")
-        breeds[breed_name] = sorted(breed_dir.glob("*.jpg"))
+    for path in sorted(images_root.glob("*.jpg")):
+        raw_name = path.stem.rsplit("_", 1)[0]
+        if raw_name[0].isupper() == want_cats:
+            breeds.setdefault(raw_name.lower(), []).append(path)
+    return breeds
 
-    top_breeds = dict(sorted(breeds.items(), key=lambda kv: len(kv[1]), reverse=True)[:DOG_BREEDS_TOP_N])
+
+def _top_breeds_to_splits(breeds: dict[str, list[Path]], top_n: int, out_name: str) -> dict[str, dict[str, int]]:
+    rng = random.Random(SEED)
+    top = sorted(breeds.items(), key=lambda kv: len(kv[1]), reverse=True)[:top_n]
+    print(f"  Razas elegidas (las {top_n} con mas imagenes): " + ", ".join(f"{n} ({len(p)})" for n, p in top))
 
     class_paths: dict[str, list[NoneSource]] = {}
-    for breed_name, paths in top_breeds.items():
-        valid = _valid_images(paths)
+    for breed_name, paths in top:
+        valid = _valid_images(paths, f"{breed_name} verificadas")
         rng.shuffle(valid)
         class_paths[breed_name] = list(valid)
-    return _materialize_splits(class_paths, PROCESSED_ROOT / "dog_breed")
+    return _materialize_splits(class_paths, PROCESSED_ROOT / out_name)
+
+
+def prepare_dog_breed_data() -> dict[str, dict[str, int]]:
+    # Stanford Dogs (carpetas "n02085620-Chihuahua") mas las razas de perro de Oxford-IIIT Pet:
+    # varias razas estan en ambos datasets, y sumarlas casi duplica los ejemplos de esas clases.
+    stanford_root = RAW_DIR / "stanford_dogs" / "Images"
+
+    breeds: dict[str, list[Path]] = {}
+    for breed_dir in sorted(p for p in stanford_root.iterdir() if p.is_dir()):
+        breed_name = breed_dir.name.split("-", 1)[1].lower().replace(" ", "_")
+        breeds.setdefault(breed_name, []).extend(sorted(breed_dir.glob("*.jpg")))
+
+    merged = 0
+    for breed_name, paths in _oxford_breeds(want_cats=False).items():
+        if breed_name in breeds:
+            breeds[breed_name].extend(paths)
+            merged += 1
+        else:
+            breeds[breed_name] = paths
+    print(f"  Razas de perro presentes en Stanford y Oxford (datos combinados): {merged}")
+
+    return _top_breeds_to_splits(breeds, DOG_BREEDS_TOP_N, "dog_breed")
 
 
 def prepare_cat_breed_data() -> dict[str, dict[str, int]]:
-    # Oxford-IIIT Pet: archivos "Raza_123.jpg"; inicial mayuscula = gato, minuscula = perro (se ignora).
-    rng = random.Random(SEED)
-    images_root = RAW_DIR / "oxford_pets" / "images"
-
-    breeds: dict[str, list[Path]] = {}
-    for path in sorted(images_root.glob("*.jpg")):
-        breed_name = path.stem.rsplit("_", 1)[0]
-        if breed_name[0].isupper():
-            breeds.setdefault(breed_name.lower(), []).append(path)
-
-    class_paths: dict[str, list[NoneSource]] = {}
-    for breed_name, paths in breeds.items():
-        valid = _valid_images(paths)
-        rng.shuffle(valid)
-        class_paths[breed_name] = list(valid)
-    return _materialize_splits(class_paths, PROCESSED_ROOT / "cat_breed")
+    return _top_breeds_to_splits(_oxford_breeds(want_cats=True), CAT_BREEDS_TOP_N, "cat_breed")
 
 
 def _report(task: str, distribution: dict[str, dict[str, int]]) -> None:

@@ -8,7 +8,7 @@ from train.common_pytorch import build_arg_parser, train_model  # noqa: E402
 
 
 def main() -> None:
-    args = build_arg_parser("dog_breed", default_epochs=40).parse_args()
+    args = build_arg_parser("dog_breed", default_epochs=60, default_head="gap").parse_args()
     train_model("dog_breed", args)
 
 

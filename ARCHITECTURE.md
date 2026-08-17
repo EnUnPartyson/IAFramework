@@ -80,8 +80,8 @@ Nota: ningún archivo `*_pytorch.py` debe importar `tensorflow`, ni ningún `*_t
 | Modelo | Dataset sugerido | Notas |
 |---|---|---|
 | Detector | perro/gato: Kaggle Cats vs Dogs + COCO val2017 (dog/cat en contexto de escena real) · ninguno: Food101 + STL10 + Places365, sin categorías relacionadas a perro/gato, cuota pareja entre las 3 | Aquí se genera el desbalance intencional. COCO evita que el modelo aprenda a distinguir clases por estilo de foto (mascota en primer plano vs escena amplia) en vez de por el animal en sí. "Ninguno" combina comida, otros animales y paisajes/escenas para variedad real |
-| Raza perro | Stanford Dogs, top-15 razas por cantidad de imágenes (`DOG_BREEDS_TOP_N` en `prepare_data.py`) | Entrenar desde cero con 120 clases y ~150 imgs/clase no es viable; top-15 maximiza datos por clase. Descarga directa sin credenciales |
-| Raza gato | Oxford-IIIT Pet, las 12 razas de gato (archivos con inicial mayúscula) | ~200 imgs/raza: dataset chico, esperar accuracy menor que en perros. Se eligió sobre el Cat Breeds Dataset de Kaggle porque no requiere API key |
+| Raza perro | Stanford Dogs **+ razas de perro de Oxford-IIIT Pet**, top-6 por cantidad de imágenes (`DOG_BREEDS_TOP_N`) | Combinar ambas fuentes casi duplica los ejemplos de las razas que están en las dos. Con 120 o 15 clases y ~150 imgs cada una el entrenamiento desde cero no alcanza (primera corrida: 25%) |
+| Raza gato | Oxford-IIIT Pet, top-6 de sus 12 razas de gato (`CAT_BREEDS_TOP_N`) | ~200 imgs/raza y sin otra fuente sin credenciales: es el modelo con menos datos, esperar la accuracy más baja de los tres |
 
 ## Decisión de desbalance (Modelo 1)
 

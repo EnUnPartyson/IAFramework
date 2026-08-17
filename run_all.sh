@@ -9,8 +9,8 @@
 # Variables opcionales:
 #   SKIP_SETUP=1      no crear venvs ni instalar dependencias (ya instaladas)
 #   SKIP_DATA=1       no descargar ni preparar datos (ya preparados)
-#   RUN_TUNE=1        correr la busqueda de hiperparametros con Optuna y aplicar el
-#                     resultado a las dos versiones del detector
+#   RUN_TUNE=1        buscar hiperparametros con Optuna para los 3 modelos y aplicarlos
+#                     a las dos versiones de cada uno
 #   TUNE_TRIALS=N     cuantos trials prueba Optuna (default 20; bajar a 5-8 en CPU)
 #   SKIP_TORCH=1      no reentrenar los modelos PyTorch (util para rehacer solo los de TF)
 #   SKIP_TF=1         no reentrenar los modelos TensorFlow
@@ -100,51 +100,53 @@ if [ "${SKIP_DATA:-0}" != "1" ]; then
     "$TORCH_PY" data/prepare_data.py
 fi
 
-# Si se corre la busqueda, sus resultados alimentan las DOS versiones del detector:
-# tunear solo PyTorch sesgaria la comparacion TF vs PyTorch.
-HPARAMS_ARG=""
-if [ -f metrics/detector_best_hparams.json ]; then
-    # ya hay una busqueda previa: reusarla para no invalidar la comparacion si se
-    # reentrena solo una mitad (ej. SKIP_TORCH=1)
-    HPARAMS_ARG="--hparams-from metrics/detector_best_hparams.json"
-fi
+# La busqueda corre en PyTorch pero su resultado alimenta las DOS versiones de cada
+# modelo: tunear un solo framework sesgaria la comparacion TF vs PyTorch.
 if [ "${RUN_TUNE:-0}" = "1" ]; then
-    log "Busqueda de hiperparametros del detector (Optuna, ${TUNE_TRIALS:-20} trials)"
-    "$TORCH_PY" train/tune_detector_pytorch.py --trials "${TUNE_TRIALS:-20}"
-    HPARAMS_ARG="--hparams-from metrics/detector_best_hparams.json"
+    for task in detector dog_breed cat_breed; do
+        log "Busqueda de hiperparametros de $task (Optuna, ${TUNE_TRIALS:-20} trials)"
+        "$TORCH_PY" train/tune_pytorch.py "$task" --trials "${TUNE_TRIALS:-20}"
+    done
 fi
+
+# Si existe el JSON de una busqueda (de ahora o de una corrida previa) se usa; asi
+# reentrenar una sola mitad no rompe la equivalencia de hiperparametros.
+hparams_for() {
+    local f="metrics/$1_best_hparams.json"
+    [ -f "$f" ] && echo "--hparams-from $f"
+}
 
 run_torch() { [ "${SKIP_TORCH:-0}" != "1" ]; }
 run_tf() { [ "${SKIP_TF:-0}" != "1" ]; }
 
 if run_torch; then
     log "Modelo 1 (detector) - PyTorch"
-    "$TORCH_PY" train/train_detector_pytorch.py $HPARAMS_ARG
+    "$TORCH_PY" train/train_detector_pytorch.py $(hparams_for detector)
 fi
 
 if run_tf; then
     log "Modelo 1 (detector) - TensorFlow"
-    "$TF_PY" train/train_detector_tensorflow.py $HPARAMS_ARG
+    "$TF_PY" train/train_detector_tensorflow.py $(hparams_for detector)
 fi
 
 if run_torch; then
     log "Modelo 2 (raza perro) - PyTorch"
-    "$TORCH_PY" train/train_dog_breed_pytorch.py
+    "$TORCH_PY" train/train_dog_breed_pytorch.py $(hparams_for dog_breed)
 fi
 
 if run_tf; then
     log "Modelo 2 (raza perro) - TensorFlow"
-    "$TF_PY" train/train_dog_breed_tensorflow.py
+    "$TF_PY" train/train_dog_breed_tensorflow.py $(hparams_for dog_breed)
 fi
 
 if run_torch; then
     log "Modelo 3 (raza gato) - PyTorch"
-    "$TORCH_PY" train/train_cat_breed_pytorch.py
+    "$TORCH_PY" train/train_cat_breed_pytorch.py $(hparams_for cat_breed)
 fi
 
 if run_tf; then
     log "Modelo 3 (raza gato) - TensorFlow"
-    "$TF_PY" train/train_cat_breed_tensorflow.py
+    "$TF_PY" train/train_cat_breed_tensorflow.py $(hparams_for cat_breed)
 fi
 
 log "Diagnostico Grad-CAM del detector (no critico)"

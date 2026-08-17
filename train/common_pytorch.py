@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from utils.model_defs_pytorch import SimpleCNN  # noqa: E402
+from utils.model_defs_pytorch import HEAD_FLATTEN, HEAD_GAP, SimpleCNN  # noqa: E402
 from utils.report_common import (  # noqa: E402
     class_weight_values,
     file_size_mb,
@@ -33,10 +33,16 @@ SCHEDULER_PATIENCE = 2
 SCHEDULER_FACTOR = 0.5
 
 
-def build_arg_parser(task: str, default_epochs: int = 30) -> argparse.ArgumentParser:
+def build_arg_parser(task: str, default_epochs: int = 30, default_head: str = HEAD_FLATTEN) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=f"Entrena el modelo '{task}' en PyTorch")
     parser.add_argument("--data-dir", type=Path, default=ROOT_DIR / "data" / "processed" / task)
     parser.add_argument("--epochs", type=int, default=default_epochs)
+    parser.add_argument(
+        "--head",
+        choices=(HEAD_FLATTEN, HEAD_GAP),
+        default=default_head,
+        help="cabezal: 'flatten' (mas capacidad, necesita muchos datos) o 'gap' (60x menos parametros)",
+    )
     # default None a proposito: distingue "no lo paso" de "lo paso igual al default",
     # necesario para que --hparams-from no pise un valor explicito (ver resolve_hparams)
     parser.add_argument("--batch-size", type=int, default=None)
@@ -129,7 +135,9 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
         raise ValueError(f"Clases en {args.data_dir} ({class_names}) != esperadas ({expected_classes})")
     print(f"[{task}/pytorch] clases ({len(class_names)}): {dict(zip(class_names, class_counts))}")
 
-    model = SimpleCNN(num_classes=len(class_names), dropout=hp["dropout"]).to(device)
+    model = SimpleCNN(num_classes=len(class_names), dropout=hp["dropout"], head=args.head).to(device)
+    n_params = sum(p.numel() for p in model.parameters())
+    print(f"[{task}/pytorch] cabezal={args.head}, {n_params:,} parametros")
     criterion = nn.CrossEntropyLoss(weight=class_weights_from_counts(class_counts, device))
     optimizer = torch.optim.Adam(model.parameters(), lr=hp["lr"], weight_decay=hp["weight_decay"])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -167,7 +175,12 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
             best_val_acc = val_acc
             epochs_without_improvement = 0
             torch.save(
-                {"state_dict": model.state_dict(), "class_names": class_names, "dropout": hp["dropout"]},
+                {
+                    "state_dict": model.state_dict(),
+                    "class_names": class_names,
+                    "dropout": hp["dropout"],
+                    "head": args.head,
+                },
                 args.model_out,
             )
         else:
@@ -195,6 +208,8 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
             "hparams_origen": str(args.hparams_from) if args.hparams_from else "defaults/CLI",
             "early_stopping_paciencia": args.patience,
             "scheduler": f"ReduceLROnPlateau(factor={SCHEDULER_FACTOR}, patience={SCHEDULER_PATIENCE})",
+            "head": args.head,
+            "n_parametros": n_params,
         },
         "distribucion_train": dict(zip(class_names, class_counts)),
         "tiempo_entrenamiento_seg": round(training_time, 1),
