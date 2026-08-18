@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from pathlib import Path
 from typing import Union
 
@@ -255,16 +256,26 @@ def _top_breeds_to_splits(breeds: dict[str, list[Path]], top_n: int, out_name: s
     return distribution
 
 
+# Stanford: "n02085620-Chihuahua". Tsinghua: "245-n000098-Australian_Shepherd" (con la
+# cantidad de imagenes como prefijo extra). El grupo capturado preserva guiones internos
+# del nombre de la raza (ej. "Shih-Tzu") porque no corta por el ULTIMO guion sino por el
+# patron "n<digitos>-" que antecede al nombre en ambos formatos.
+BREED_DIR_RE = re.compile(r"^(?:\d+-)?n\d+-(.+)$")
+
+
 def _add_imagenet_style_dirs(breeds: dict[str, list[Path]], root: Path) -> int:
-    """Suma carpetas estilo "nXXXXXXXX-nombre_de_raza" (Stanford y Tsinghua usan ese formato)."""
+    """Suma carpetas de raza con nombre estilo Stanford/Tsinghua (ver BREED_DIR_RE)."""
     found = 0
-    for breed_dir in sorted(root.rglob("n*-*")):
-        if not breed_dir.is_dir():
+    if not root.exists():
+        return found
+    for breed_dir in sorted(p for p in root.rglob("*") if p.is_dir()):
+        match = BREED_DIR_RE.match(breed_dir.name)
+        if not match:
             continue
         images = sorted(breed_dir.glob("*.jpg")) + sorted(breed_dir.glob("*.jpeg"))
         if not images:
             continue
-        breed_name = breed_dir.name.split("-", 1)[1].lower().replace(" ", "_")
+        breed_name = match.group(1).lower().replace(" ", "_")
         breeds.setdefault(breed_name, []).extend(images)
         found += 1
     return found

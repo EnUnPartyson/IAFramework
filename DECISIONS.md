@@ -53,14 +53,10 @@ Registro de decisiones tomadas durante el proyecto y pendientes por resolver. Ac
 
 | 2026-08-18 | **Bug corregido**: MixUp sin peso por clase en PyTorch (antes lo mantenía; TF ya lo descartaba porque Keras no soporta `class_weight` con etiquetas blandas) | Corrida real en EC2 (17/08): `dog_breed`/`cat_breed` en TF dieron 25-27% vs 44-54% en PyTorch. Con peso por clase, `lam·CE(y1,w1)+(1-lam)·CE(y2,w2)` (PyTorch) **no es matemáticamente igual** a la loss de TF sobre la etiqueta blanda combinada (el peso rompe la linealidad de la cross entropy) — sin peso, ambas fórmulas sí son idénticas. Réplicar el peso en TF exigiría una loss custom con acceso separado a las dos etiquetas mezcladas (`train_step` propio, no `model.fit()`), mucho riesgo para un beneficio no garantizado; se optó por simetrizar hacia la opción simple, que además es la práctica estándar en la literatura de MixUp. Pendiente: correr de nuevo y confirmar cuánto de la brecha PyTorch/TF se explicaba por esto vs. por otras causas (ver dos hallazgos sin resolver abajo) |
 
-## Hallazgos de la corrida del 17/08 sin resolver (necesitan info de la instancia, no se tocó código a ciegas)
+| 2026-08-18 | **Bug confirmado y corregido**: Tsinghua Dogs nunca se fusionaba con `dog_breed` — el patrón `n*-*` exigía que el nombre de carpeta empezara con "n", pero Tsinghua nombra sus carpetas `<cantidad>-n<synset>-<Raza>` (con la cantidad de imágenes como prefijo, ej. `245-n000098-Australian_Shepherd`), no `n<synset>-<Raza>` como Stanford. Se reemplazó el glob por `BREED_DIR_RE` (regex `^(?:\d+-)?n\d+-(.+)$`), que matchea ambos formatos y preserva guiones internos del nombre de raza (ej. "Shih-Tzu") | Explica por qué `dog_breed` (44,2%, corrida del 17/08) rindió peor que `cat_breed` (53,9%) pese a tener supuestamente 3 fuentes combinadas: en los hechos solo usaba Stanford+Oxford, igual que antes de agregar Tsinghua. Verificado con estructura sintética replicando los nombres reales vistos en la instancia: suma correctamente conteos de razas presentes en ambas fuentes y agrega razas nuevas exclusivas de Tsinghua. Pendiente: re-correr y confirmar la mejora real en `dog_breed` |
 
-- **`dog_breed` (44,2%) rindió peor que `cat_breed` (53,9%)**, al revés de lo esperado si Tsinghua Dogs (~70k imgs) se fusionó bien con Stanford+Oxford. Sospecha: el patrón de carpetas `n*-*` que asume `_add_imagenet_style_dirs()` para Tsinghua nunca se verificó contra el zip real (solo se confirmó que la URL respondía 200, no la estructura interna). Para confirmar o descartar, correr en la instancia y compartir la salida:
-  ```bash
-  grep "Carpetas de raza encontradas" -r ~/proyecto/*.log 2>/dev/null  # o buscarlo en el output de prepare_data.py
-  cat ~/proyecto/metrics/dog_breed_data_distribution.json
-  find ~/proyecto/data/raw/tsinghua_dogs -maxdepth 2 -type d | head -20
-  ```
+## Hallazgo sin resolver (necesita perfilar en la instancia, no se tocó código a ciegas)
+
 - **TF tardó 9-10× más por época en las tareas de raza** (vs. solo 1,65× en el detector, que usa augmentation base sin MixUp). Apunta a que las capas `RandAugment`/`RandomErasing` de Keras 3 (relativamente nuevas) son el cuello de botella en la receta "strong", no la GPU en sí. Para diagnosticar: correr `nvidia-smi -l 2` durante un entrenamiento de raza en TF y ver si el `GPU-Util` cae mucho por debajo del que muestra PyTorch en la misma tarea (indicaría que el pipeline de augmentation está CPU-bound y la GPU espera datos)
 
 ## Pendientes por decidir
