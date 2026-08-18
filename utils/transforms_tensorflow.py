@@ -106,10 +106,16 @@ def make_datasets(
         val_ds = val_ds.map(to_onehot, num_parallel_calls=tf.data.AUTOTUNE)
         test_ds = test_ds.map(to_onehot, num_parallel_calls=tf.data.AUTOTUNE)
 
+    # el presupuesto de RAM por defecto del autotuner es menor que un lote nuestro
+    # (128 imgs de 160px ~= 64MB), asi que no llega a precargar y avisa por consola.
+    # Con 2GB puede mantener varios lotes adelantados sin comprometer la memoria.
+    opciones = tf.data.Options()
+    opciones.autotune.ram_budget = 2 * 1024 ** 3
+
     autotune = tf.data.AUTOTUNE
     return (
-        train_ds.prefetch(autotune),
-        val_ds.prefetch(autotune),
-        test_ds.prefetch(autotune),
+        train_ds.prefetch(autotune).with_options(opciones),
+        val_ds.prefetch(autotune).with_options(opciones),
+        test_ds.prefetch(autotune).with_options(opciones),
         class_names,
     )
