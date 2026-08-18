@@ -73,6 +73,12 @@ def build_arg_parser(task: str) -> argparse.ArgumentParser:
     parser.add_argument(
         "--workers", type=int, default=default_workers(), help="procesos de carga de datos del DataLoader"
     )
+    parser.add_argument(
+        "--amp",
+        action="store_true",
+        help="precision mixta (float16 en el computo, float32 en los pesos). Solo acelera si la "
+        "GPU es el cuello de botella; si esta esperando datos, no cambia nada",
+    )
     # default None a proposito: distingue "no lo paso" de "lo paso igual al default",
     # necesario para que --hparams-from no pise un valor explicito (ver resolve_hparams)
     parser.add_argument("--batch-size", type=int, default=None)
@@ -133,10 +139,14 @@ def run_epoch(
     device: torch.device,
     optimizer: torch.optim.Optimizer | None = None,
     mixup: float = 0.0,
+    scaler: "torch.amp.GradScaler | None" = None,
 ) -> tuple[float, float]:
+    """Un paso completo por el loader. Con `scaler` activa precision mixta (float16 en el
+    computo, float32 en los pesos), equivalente a la policy mixed_float16 de Keras."""
     is_train = optimizer is not None
     model.train(is_train)
     beta = torch.distributions.Beta(mixup, mixup) if (is_train and mixup > 0) else None
+    use_amp = scaler is not None and scaler.is_enabled()
     total_loss, correct, total = 0.0, 0, 0
     with torch.set_grad_enabled(is_train):
         for images, labels in loader:
@@ -144,29 +154,49 @@ def run_epoch(
             if is_train:
                 optimizer.zero_grad()
 
-            if beta is not None:
-                # MixUp: mezcla cada imagen con otra del batch; la loss se reparte entre
-                # ambas etiquetas. Sin peso por clase a proposito (ver DECISIONS.md): con
-                # peso, lam*CE(y1,w1)+(1-lam)*CE(y2,w2) no es igual a la loss de TF sobre la
-                # etiqueta blanda combinada (la ponderacion rompe la linealidad de la cross
-                # entropy); sin peso, ambas formulas SI son matematicamente identicas.
-                lam = beta.sample().item()
-                perm = torch.randperm(images.size(0), device=device)
-                mixed = lam * images + (1.0 - lam) * images[perm]
-                logits = model(mixed)
-                loss = lam * F.cross_entropy(logits, labels) + (1.0 - lam) * F.cross_entropy(logits, labels[perm])
-            else:
-                logits = model(images)
-                loss = criterion(logits, labels)
+            with torch.amp.autocast(device.type, enabled=use_amp):
+                logits, loss = _forward(model, criterion, images, labels, beta, device)
 
             if is_train:
-                loss.backward()
-                optimizer.step()
+                if use_amp:
+                    # escala la loss para que los gradientes chicos no se hagan cero en fp16
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
             total_loss += loss.item() * images.size(0)
             # con mixup el accuracy de train es aproximado (se compara contra la etiqueta dominante)
             correct += (logits.argmax(dim=1) == labels).sum().item()
             total += images.size(0)
     return total_loss / total, correct / total
+
+
+def _forward(
+    model: nn.Module,
+    criterion: nn.Module,
+    images: torch.Tensor,
+    labels: torch.Tensor,
+    beta: "torch.distributions.Beta | None",
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Forward + loss, con o sin MixUp. Separado para que quepa dentro del autocast."""
+    if beta is None:
+        logits = model(images)
+        return logits, criterion(logits, labels)
+
+    # MixUp: mezcla cada imagen con otra del batch; la loss se reparte entre ambas
+    # etiquetas. Sin peso por clase a proposito (ver DECISIONS.md): con peso,
+    # lam*CE(y1,w1)+(1-lam)*CE(y2,w2) no es igual a la loss de TF sobre la etiqueta blanda
+    # combinada (la ponderacion rompe la linealidad de la cross entropy); sin peso, ambas
+    # formulas SI son matematicamente identicas.
+    lam = beta.sample().item()
+    perm = torch.randperm(images.size(0), device=device)
+    mixed = lam * images + (1.0 - lam) * images[perm]
+    logits = model(mixed)
+    loss = lam * F.cross_entropy(logits, labels) + (1.0 - lam) * F.cross_entropy(logits, labels[perm])
+    return logits, loss
 
 
 @torch.no_grad()
@@ -236,6 +266,14 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     # en regularizacion efectiva. Como ambos frameworks comparten los hiperparametros que
     # busca Optuna, usar Adam aca invalidaba la comparacion. Ver DECISIONS.md.
     optimizer = torch.optim.AdamW(model.parameters(), lr=hp["lr"], weight_decay=hp["weight_decay"])
+    # AMP solo tiene sentido en GPU; en CPU el scaler queda deshabilitado y todo corre en fp32
+    use_amp = bool(args.amp) and device.type == "cuda"
+    scaler = torch.amp.GradScaler(device.type, enabled=use_amp)
+    if args.amp and not use_amp:
+        print(f"[{task}/pytorch] --amp pedido pero no hay GPU: se entrena en float32")
+    elif use_amp:
+        print(f"[{task}/pytorch] precision mixta activada (float16)")
+
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="max", factor=SCHEDULER_FACTOR, patience=SCHEDULER_PATIENCE
     )
@@ -249,7 +287,9 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     epochs_run = 0
     for epoch in range(1, args.epochs + 1):
         epochs_run = epoch
-        train_loss, train_acc = run_epoch(model, train_loader, criterion, device, optimizer, mixup=args.mixup)
+        train_loss, train_acc = run_epoch(
+            model, train_loader, criterion, device, optimizer, mixup=args.mixup, scaler=scaler
+        )
         val_loss, val_acc = run_epoch(model, val_loader, criterion, device)
         scheduler.step(val_acc)
         current_lr = optimizer.param_groups[0]["lr"]
@@ -330,6 +370,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
             "blocks": args.blocks,
             "img_size": args.img_size,
             "n_parametros": n_params,
+            "precision_mixta": use_amp,
             "dataloader_workers": args.workers,
             "aug": args.aug,
             "mixup_alpha": args.mixup,

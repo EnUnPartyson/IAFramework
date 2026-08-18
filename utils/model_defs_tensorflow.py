@@ -79,7 +79,9 @@ def build_simple_cnn(
         layers.Dense(256, kernel_initializer=init),
         layers.ReLU(),
         layers.Dropout(dropout),
-        layers.Dense(num_classes, kernel_initializer=init),  # logits, igual que la version PyTorch
+        # dtype float32 explicito: con la policy mixed_float16 la salida debe quedar en
+        # float32 por estabilidad numerica del softmax y la loss. Sin la policy es un no-op.
+        layers.Dense(num_classes, kernel_initializer=init, dtype="float32"),  # logits
     ]
     return tf.keras.Sequential(steps)
 

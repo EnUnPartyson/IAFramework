@@ -85,13 +85,13 @@ titulo "3/4 · Entrenamiento de prueba ($TASK, $EPOCHS epocas por framework)"
 echo "  Se mide el uso efectivo de GPU: si queda bajo, la GPU esta esperando datos."
 
 medir() {
-    local nombre="$1" py="$2" script="$3"
+    local nombre="$1" py="$2" script="$3"; shift 3
     local log="$TMP/${nombre}.log" util="$TMP/${nombre}.util"
 
     nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits -l 1 > "$util" 2>/dev/null &
     local monitor=$!
     local t0=$(date +%s)
-    "$py" "$script" --epochs "$EPOCHS" \
+    "$py" "$script" --epochs "$EPOCHS" "$@" \
         --model-out "$TMP/${nombre}.model" --metrics-out "$TMP/${nombre}.json" > "$log" 2>&1
     local rc=$?
     local t1=$(date +%s)
@@ -118,6 +118,24 @@ medir() {
 
 medir "pytorch" "$TORCH_PY" "train/train_${TASK}_pytorch.py" || exit 1
 medir "tensorflow" "$TF_PY" "train/train_${TASK}_tensorflow.py" || exit 1
+
+# ---------------------------------------------------------- 3b. precision mixta
+titulo "3b/4 · Precision mixta (float16)"
+echo "  Repite lo mismo con --amp. Solo acelera si la GPU esta saturada:"
+echo "  si arriba el GPU-Util quedo bajo, el cuello son los datos y esto no cambiara nada."
+
+medir "pytorch-amp" "$TORCH_PY" "train/train_${TASK}_pytorch.py" --amp || warn "AMP fallo en PyTorch"
+medir "tensorflow-amp" "$TF_PY" "train/train_${TASK}_tensorflow.py" --amp || warn "AMP fallo en TensorFlow"
+
+for fw in pytorch tensorflow; do
+    base=$(cat "$TMP/${fw}.seg" 2>/dev/null || echo 0)
+    amp=$(cat "$TMP/${fw}-amp.seg" 2>/dev/null || echo 0)
+    if [ "$base" -gt 0 ] && [ "$amp" -gt 0 ]; then
+        printf "  %-12s fp32 %4ss  ->  amp %4ss  (%.2fx)\n" "$fw" "$base" "$amp" \
+            "$(awk "BEGIN{print $base/$amp}")"
+    fi
+done
+echo "  Si la mejora es menor a ~1.2x no vale la pena: se gana poco y se agrega riesgo numerico."
 
 # ---------------------------------------------------------------- 4. estimacion
 titulo "4/4 · Estimacion de la corrida completa"
@@ -154,4 +172,6 @@ echo "  Si todo dio OK y el tiempo estimado es aceptable:"
 echo ""
 echo "    tmux new -s full"
 echo "    RUN_TUNE=1 TUNE_TRIALS=12 SKIP_SETUP=1 SKIP_DATA=1 bash run_all.sh"
+echo ""
+echo "  Agregar USE_AMP=1 adelante solo si la precision mixta dio una mejora clara arriba."
 echo ""

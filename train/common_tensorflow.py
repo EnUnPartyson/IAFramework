@@ -71,6 +71,12 @@ def build_arg_parser(task: str) -> argparse.ArgumentParser:
     )
     parser.add_argument("--img-size", type=int, default=d["img_size"], help="resolucion de entrenamiento/eval")
     parser.add_argument("--blocks", type=int, default=d["blocks"], help="cantidad de bloques convolucionales (3-5)")
+    parser.add_argument(
+        "--amp",
+        action="store_true",
+        help="precision mixta (float16 en el computo, float32 en los pesos). Solo acelera si la "
+        "GPU es el cuello de botella; si esta esperando datos, no cambia nada",
+    )
     # default None a proposito: distingue "no lo paso" de "lo paso igual al default",
     # necesario para que --hparams-from no pise un valor explicito (ver resolve_hparams)
     parser.add_argument("--batch-size", type=int, default=None)
@@ -101,6 +107,16 @@ def _labels_from_dataset(dataset: tf.data.Dataset) -> list[int]:
 def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str, ...] | None = None) -> dict:
     gpus = tf.config.list_physical_devices("GPU")
     print(f"[{task}/tensorflow] GPUs visibles: {len(gpus)}")
+
+    # la policy debe fijarse ANTES de construir el modelo. mixed_float16 deja las variables
+    # en float32 y solo el computo en float16, igual que el AMP de PyTorch. En Keras el
+    # escalado de la loss lo agrega compile() automaticamente.
+    use_amp = bool(args.amp) and len(gpus) > 0
+    if args.amp and not use_amp:
+        print(f"[{task}/tensorflow] --amp pedido pero no hay GPU: se entrena en float32")
+    tf.keras.mixed_precision.set_global_policy("mixed_float16" if use_amp else "float32")
+    if use_amp:
+        print(f"[{task}/tensorflow] precision mixta activada (float16)")
 
     hp = resolve_hparams(args, args.hparams_from)
     print(f"[{task}/tensorflow] hiperparametros: {hp}")
@@ -245,6 +261,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
             "blocks": args.blocks,
             "img_size": args.img_size,
             "n_parametros": int(model.count_params()),
+            "precision_mixta": use_amp,
             "aug": args.aug,
             "mixup_alpha": args.mixup,
         },

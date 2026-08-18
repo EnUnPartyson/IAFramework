@@ -14,6 +14,8 @@
 #   TUNE_TRIALS=N     cuantos trials prueba Optuna (default 20; bajar a 5-8 en CPU)
 #   SKIP_TORCH=1      no reentrenar los modelos PyTorch (util para rehacer solo los de TF)
 #   SKIP_TF=1         no reentrenar los modelos TensorFlow
+#   USE_AMP=1         precision mixta (float16) en ambos frameworks. Solo acelera si la GPU
+#                     esta saturada; correr preflight.sh antes para saberlo
 #   ALLOW_CPU=1       permitir entrenar sin GPU (por defecto aborta: entrenar en CPU sin
 #                     querer da resultados no comparables y tarda ~12x mas)
 #   TORCH_INDEX_URL   indice extra de pip para wheels de torch (por defecto no se usa:
@@ -116,37 +118,40 @@ hparams_for() {
     [ -f "$f" ] && echo "--hparams-from $f"
 }
 
+AMP_ARG=""
+[ "${USE_AMP:-0}" = "1" ] && AMP_ARG="--amp"
+
 run_torch() { [ "${SKIP_TORCH:-0}" != "1" ]; }
 run_tf() { [ "${SKIP_TF:-0}" != "1" ]; }
 
 if run_torch; then
     log "Modelo 1 (detector) - PyTorch"
-    "$TORCH_PY" train/train_detector_pytorch.py $(hparams_for detector)
+    "$TORCH_PY" train/train_detector_pytorch.py $(hparams_for detector) $AMP_ARG
 fi
 
 if run_tf; then
     log "Modelo 1 (detector) - TensorFlow"
-    "$TF_PY" train/train_detector_tensorflow.py $(hparams_for detector)
+    "$TF_PY" train/train_detector_tensorflow.py $(hparams_for detector) $AMP_ARG
 fi
 
 if run_torch; then
     log "Modelo 2 (raza perro) - PyTorch"
-    "$TORCH_PY" train/train_dog_breed_pytorch.py $(hparams_for dog_breed)
+    "$TORCH_PY" train/train_dog_breed_pytorch.py $(hparams_for dog_breed) $AMP_ARG
 fi
 
 if run_tf; then
     log "Modelo 2 (raza perro) - TensorFlow"
-    "$TF_PY" train/train_dog_breed_tensorflow.py $(hparams_for dog_breed)
+    "$TF_PY" train/train_dog_breed_tensorflow.py $(hparams_for dog_breed) $AMP_ARG
 fi
 
 if run_torch; then
     log "Modelo 3 (raza gato) - PyTorch"
-    "$TORCH_PY" train/train_cat_breed_pytorch.py $(hparams_for cat_breed)
+    "$TORCH_PY" train/train_cat_breed_pytorch.py $(hparams_for cat_breed) $AMP_ARG
 fi
 
 if run_tf; then
     log "Modelo 3 (raza gato) - TensorFlow"
-    "$TF_PY" train/train_cat_breed_tensorflow.py $(hparams_for cat_breed)
+    "$TF_PY" train/train_cat_breed_tensorflow.py $(hparams_for cat_breed) $AMP_ARG
 fi
 
 log "Diagnostico Grad-CAM del detector (no critico)"
