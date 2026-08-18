@@ -76,6 +76,7 @@ for t in detector dog_breed cat_breed; do
         n_clases=$(find "$d" -mindepth 1 -maxdepth 1 -type d | wc -l)
         n_imgs=$(find "$d" -name '*.jpg' | wc -l)
         echo "  $t: $n_clases clases, $n_imgs imagenes de entrenamiento"
+        echo "$n_imgs" > "$TMP/count_$t"   # lo usa la estimacion final
         [ "$n_imgs" -lt 100 ] && { warn "$t tiene muy pocas imagenes"; falta_datos=1; }
     else
         fail "$t: falta $d"; falta_datos=1
@@ -154,35 +155,64 @@ for fw in pytorch tensorflow; do
     fi
 done
 echo "  Si la mejora es menor a ~1.2x no vale la pena: se gana poco y se agrega riesgo numerico."
+echo "  Nota: RandomErasing de Keras no soporta float16, asi que --amp no funciona en TF con"
+echo "  augmentation fuerte. Usarlo solo en PyTorch romperia la comparacion entre frameworks."
 
 # ---------------------------------------------------------------- 4. estimacion
 titulo "4/4 · Estimacion de la corrida completa"
 
 seg_pt=$(cat "$TMP/pytorch.seg" 2>/dev/null || echo 0)
 seg_tf=$(cat "$TMP/tensorflow.seg" 2>/dev/null || echo 0)
-python3 - "$seg_pt" "$seg_tf" "$EPOCHS" <<'PY'
+python3 - "$seg_pt" "$seg_tf" "$EPOCHS" "$TASK" \
+    "$(cat "$TMP/count_detector" 2>/dev/null || echo 0)" \
+    "$(cat "$TMP/count_dog_breed" 2>/dev/null || echo 0)" \
+    "$(cat "$TMP/count_cat_breed" 2>/dev/null || echo 0)" <<'PY'
 import sys
-seg_pt, seg_tf, epochs = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
-# por epoca, descontando ~20s de arranque de cada corrida
-ep_pt = max(1, (seg_pt - 20) / epochs)
-ep_tf = max(1, (seg_tf - 20) / epochs)
-# cat_breed es el dataset mas chico; los otros escalan por cantidad de imagenes. El detector
-# lleva un 0.6 extra porque corre a 128px (vs 160) y sin mixup ni augmentation fuerte.
-FACTOR = {"cat_breed": 1.0, "dog_breed": 12.0, "detector": 20.0 * 0.6}
-EPOCAS = {"cat_breed": 80, "dog_breed": 80, "detector": 30}
-total = 0.0
+seg_pt, seg_tf, epochs, medido = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
+IMGS = {"detector": int(sys.argv[5]), "dog_breed": int(sys.argv[6]), "cat_breed": int(sys.argv[7])}
+
+# segundos por epoca del modelo QUE SE MIDIO, descontando el arranque (init de CUDA,
+# escaneo del dataset), que no se repite por epoca
+ARRANQUE = 25
+ep_pt = max(0.5, (seg_pt - ARRANQUE) / epochs)
+ep_tf = max(0.5, (seg_tf - ARRANQUE) / epochs)
+
+# se escala por cantidad real de imagenes, no por factores fijos: asi la estimacion vale
+# sea cual sea el modelo que se midio (PREFLIGHT_TASK)
+EPOCAS = {"detector": 30, "dog_breed": 80, "cat_breed": 80}
+# el detector corre a 128px y 4 bloques; las razas a 160px y 5. El costo por imagen escala
+# aprox. con el area: (128/160)^2 = 0.64
+COSTO_IMG = {"detector": 0.64, "dog_breed": 1.0, "cat_breed": 1.0}
+TUNE_EPOCAS = {"detector": 8, "dog_breed": 14, "cat_breed": 14}
+
+base = IMGS[medido] * COSTO_IMG[medido]
+if base <= 0:
+    print("  No se pudo estimar: faltan los conteos de imagenes.")
+    raise SystemExit
+
+print(f"  Medido sobre {medido}: {ep_pt:.0f}s/epoca en PyTorch, {ep_tf:.0f}s/epoca en TensorFlow.\n")
 print(f"  {'modelo':<12}{'PyTorch':>12}{'TensorFlow':>14}")
 print("  " + "-" * 38)
-for tarea, factor in FACTOR.items():
-    h_pt = ep_pt * factor * EPOCAS[tarea] / 3600
-    h_tf = ep_tf * factor * EPOCAS[tarea] / 3600
+total = 0.0
+for tarea in ("detector", "dog_breed", "cat_breed"):
+    escala = (IMGS[tarea] * COSTO_IMG[tarea]) / base
+    h_pt = ep_pt * escala * EPOCAS[tarea] / 3600
+    h_tf = ep_tf * escala * EPOCAS[tarea] / 3600
     total += h_pt + h_tf
     print(f"  {tarea:<12}{h_pt:>11.1f}h{h_tf:>13.1f}h")
 print("  " + "-" * 38)
-print(f"  {'TOTAL':<12}{total:>25.1f}h  (cota alta: el early stopping suele cortar antes)")
+print(f"  {'entrenamiento':<12}{total:>25.1f}h")
+
+# Optuna corre solo en PyTorch, con menos epocas por trial y con pruning (~35% de ahorro)
+tune = sum(
+    ep_pt * ((IMGS[t] * COSTO_IMG[t]) / base) * TUNE_EPOCAS[t] * 12 * 0.65 / 3600
+    for t in EPOCAS
+)
+print(f"  {'+ Optuna':<12}{tune:>25.1f}h  (12 trials por modelo, con pruning)")
+print(f"  {'TOTAL':<12}{total + tune:>25.1f}h")
 print()
-print("  Nota: es una extrapolacion desde el modelo mas chico; sirve para el orden de")
-print("  magnitud, no como promesa. RUN_TUNE=1 suma aparte la busqueda de Optuna.")
+print("  Es una cota ALTA: asume que los 3 modelos agotan sus epocas maximas, y el early")
+print("  stopping suele cortar bastante antes. Sin RUN_TUNE=1 se ahorra la parte de Optuna.")
 PY
 
 titulo "Listo"
