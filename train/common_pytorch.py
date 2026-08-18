@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
@@ -128,12 +129,15 @@ def run_epoch(
 
             if beta is not None:
                 # MixUp: mezcla cada imagen con otra del batch; la loss se reparte entre
-                # ambas etiquetas. Mismo algoritmo que la version TF (transforms_tensorflow).
+                # ambas etiquetas. Sin peso por clase a proposito (ver DECISIONS.md): con
+                # peso, lam*CE(y1,w1)+(1-lam)*CE(y2,w2) no es igual a la loss de TF sobre la
+                # etiqueta blanda combinada (la ponderacion rompe la linealidad de la cross
+                # entropy); sin peso, ambas formulas SI son matematicamente identicas.
                 lam = beta.sample().item()
                 perm = torch.randperm(images.size(0), device=device)
                 mixed = lam * images + (1.0 - lam) * images[perm]
                 logits = model(mixed)
-                loss = lam * criterion(logits, labels) + (1.0 - lam) * criterion(logits, labels[perm])
+                loss = lam * F.cross_entropy(logits, labels) + (1.0 - lam) * F.cross_entropy(logits, labels[perm])
             else:
                 logits = model(images)
                 loss = criterion(logits, labels)
