@@ -213,7 +213,12 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     n_params = sum(p.numel() for p in model.parameters())
     print(f"[{task}/pytorch] cabezal={args.head}, {args.blocks} bloques, {args.img_size}px, {n_params:,} parametros")
     criterion = nn.CrossEntropyLoss(weight=class_weights_from_counts(class_counts, device))
-    optimizer = torch.optim.Adam(model.parameters(), lr=hp["lr"], weight_decay=hp["weight_decay"])
+    # AdamW y no Adam: Keras aplica weight_decay DESACOPLADO (estilo AdamW), mientras que
+    # torch.optim.Adam lo aplica ACOPLADO (L2 sumado al gradiente). Con wd=1e-2, tras 50
+    # pasos, Adam lleva un peso de 1.0 a 0.950 y AdamW/Keras a 0.9995: 100x de diferencia
+    # en regularizacion efectiva. Como ambos frameworks comparten los hiperparametros que
+    # busca Optuna, usar Adam aca invalidaba la comparacion. Ver DECISIONS.md.
+    optimizer = torch.optim.AdamW(model.parameters(), lr=hp["lr"], weight_decay=hp["weight_decay"])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="max", factor=SCHEDULER_FACTOR, patience=SCHEDULER_PATIENCE
     )

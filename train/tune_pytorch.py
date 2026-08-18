@@ -62,7 +62,8 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, device: torch.devic
         img_size=recipe["img_size"],
     ).to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights_from_counts(class_counts, device))
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    # AdamW para igualar el weight_decay desacoplado de Keras (ver common_pytorch.py)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     best_val_f1 = -1.0
     for epoch in range(tune_epochs):

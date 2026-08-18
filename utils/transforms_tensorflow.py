@@ -29,10 +29,12 @@ def build_augmentation(aug: str = AUG_BASE) -> tf.keras.Sequential:
         layers.RandomZoom(height_factor=(-0.3, 0.0)),  # solo zoom-in, emula RandomResizedCrop(0.5-1.0)
     ]
     if aug == AUG_STRONG:
-        # espejo de torchvision RandAugment(num_ops=2) + RandomErasing (ver transforms_pytorch)
+        # espejo de torchvision RandAugment(num_ops=2, magnitude=9) + RandomErasing(p=0.25).
+        # Los defaults de Keras NO coinciden: factor=(0, 0.5) en RandAugment (torchvision usa
+        # 9/31 ~= 0.29) y factor=(0, 1.0) en RandomErasing (probabilidad media ~50% vs 25%).
         steps += [
-            layers.RandAugment(value_range=(0, 255), num_ops=2),
-            layers.RandomErasing(value_range=(0, 255)),
+            layers.RandAugment(value_range=(0, 255), num_ops=2, factor=0.29),
+            layers.RandomErasing(value_range=(0, 255), factor=0.25),
         ]
     else:
         steps += [

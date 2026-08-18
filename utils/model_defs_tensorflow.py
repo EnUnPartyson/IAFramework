@@ -21,6 +21,25 @@ HEAD_GAP = "gap"
 # filtros por bloque conv; blocks=N usa los primeros N (espejo de model_defs_pytorch)
 BLOCK_FILTERS = (32, 64, 128, 256, 512)
 
+# BatchNorm: Keras y PyTorch usan convenciones OPUESTAS para momentum.
+#   PyTorch: running = (1 - m) * running + m * batch      -> default m=0.1
+#   Keras:   moving  = m * moving      + (1 - m) * batch  -> default m=0.99
+# El 0.1 de PyTorch equivale a 0.9 en Keras. Dejar el default (0.99) actualiza las
+# estadisticas 10x mas lento: en datasets chicos (razas, ~78 pasos por epoca) nunca
+# convergen, y como validacion/test las usan, la accuracy se hunde. Ver DECISIONS.md.
+BN_MOMENTUM = 0.9      # equivalente al momentum=0.1 de PyTorch
+BN_EPSILON = 1e-5      # el default de Keras es 1e-3, el de PyTorch 1e-5
+
+
+def _pytorch_style_init() -> tf.keras.initializers.Initializer:
+    """Replica la inicializacion por defecto de Conv2d/Linear de PyTorch.
+
+    PyTorch usa kaiming_uniform con a=sqrt(5), que equivale a uniforme en
+    +-sqrt(1/fan_in). Keras por defecto usa glorot_uniform, ~40% mas ancho.
+    VarianceScaling(scale=1/3, fan_in, uniform) da limite=sqrt(3*(1/3)/fan_in)=sqrt(1/fan_in).
+    """
+    return tf.keras.initializers.VarianceScaling(scale=1.0 / 3.0, mode="fan_in", distribution="uniform")
+
 
 def build_simple_cnn(
     num_classes: int,
@@ -37,23 +56,24 @@ def build_simple_cnn(
     if img_size % (2 ** blocks) != 0:
         raise ValueError(f"img_size={img_size} no es divisible por 2^{blocks}")
 
+    init = _pytorch_style_init()
     steps: list = [
         layers.Input(shape=(img_size, img_size, 3)),
         layers.Rescaling(1.0 / 127.5, offset=-1.0),
     ]
     for out_ch in BLOCK_FILTERS[:blocks]:
         steps += [
-            layers.Conv2D(out_ch, 3, padding="same"),
-            layers.BatchNormalization(),
+            layers.Conv2D(out_ch, 3, padding="same", kernel_initializer=init),
+            layers.BatchNormalization(momentum=BN_MOMENTUM, epsilon=BN_EPSILON),
             layers.ReLU(),
             layers.MaxPooling2D(2),
         ]
     steps += [
         layers.Flatten() if head == HEAD_FLATTEN else layers.GlobalAveragePooling2D(),
-        layers.Dense(256),
+        layers.Dense(256, kernel_initializer=init),
         layers.ReLU(),
         layers.Dropout(dropout),
-        layers.Dense(num_classes),  # logits, igual que la version PyTorch
+        layers.Dense(num_classes, kernel_initializer=init),  # logits, igual que la version PyTorch
     ]
     return tf.keras.Sequential(steps)
 
