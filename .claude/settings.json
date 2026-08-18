@@ -4,7 +4,8 @@
       "Bash(python -m py_compile utils/transforms.py utils/model_defs.py data/download_dataset.py data/prepare_data.py train/train_detector.py)",
       "Bash(python -m py_compile utils/model_defs.py data/download_dataset.py data/prepare_data.py train/train_detector.py train/tune_detector.py)",
       "Bash(python -m py_compile data/download_dataset.py data/prepare_data.py)",
-      "Bash(python -m py_compile utils/transforms.py)"
+      "Bash(python -m py_compile utils/transforms.py)",
+      "*"
     ]
   }
 }

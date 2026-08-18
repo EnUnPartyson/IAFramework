@@ -8,3 +8,8 @@ scikit-learn
 matplotlib
 pillow
 optuna
+
+# API para la app Ionic (inference/server.py); no hacen falta para entrenar
+fastapi
+uvicorn[standard]
+python-multipart

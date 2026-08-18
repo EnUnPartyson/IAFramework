@@ -26,5 +26,15 @@ __pycache__/
 .DS_Store
 .vscode/settings.json
 
+# App Ionic (se regeneran con npm install / npm run build)
+app/node_modules/
+app/dist/
+app/.angular/
+app/android/
+app/ios/
+
+# Capturas del script de camara
+capturas/
+
 # Logs
 *.log
