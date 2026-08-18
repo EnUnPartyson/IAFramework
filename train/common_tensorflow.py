@@ -29,10 +29,18 @@ from utils.report_common import (  # noqa: E402
     save_open_set_plot,
     save_training_curves_plot,
 )
-from utils.transforms_tensorflow import AUG_BASE, AUG_STRONG, count_train_images_per_class, make_datasets  # noqa: E402
+from utils.transforms_tensorflow import (  # noqa: E402
+    AUG_BASE,
+    AUG_STRONG,
+    build_augmentation,
+    count_train_images_per_class,
+    make_datasets,
+)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-SCHEDULER_PATIENCE = 2
+# paciencia 4 y no 2: con val_accuracy ruidosa (normal en datasets chicos con MixUp), una
+# paciencia corta interpreta el ruido como estancamiento y desploma el LR en pocas epocas
+SCHEDULER_PATIENCE = 4
 SCHEDULER_FACTOR = 0.5
 
 
@@ -115,16 +123,19 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
         class_weight = {i: w for i, w in enumerate(class_weight_values(class_counts))}
         loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
+    # la augmentation va DENTRO del modelo para que corra en GPU: en el pipeline de tf.data
+    # queda en CPU y con pocos vCPU la GPU se queda esperando datos (ver DECISIONS.md)
     model = build_simple_cnn(
         num_classes=len(class_names),
         dropout=hp["dropout"],
         img_size=args.img_size,
         head=args.head,
         blocks=args.blocks,
+        augmentation=build_augmentation(args.aug),
     )
     print(
         f"[{task}/tensorflow] cabezal={args.head}, {args.blocks} bloques, {args.img_size}px, "
-        f"{model.count_params():,} parametros"
+        f"{model.count_params():,} parametros (augmentation en GPU)"
     )
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=hp["lr"], weight_decay=hp["weight_decay"]),

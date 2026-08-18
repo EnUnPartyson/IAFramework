@@ -47,8 +47,14 @@ def build_simple_cnn(
     img_size: int = IMG_SIZE,
     head: str = HEAD_FLATTEN,
     blocks: int = 4,
+    augmentation: tf.keras.Sequential | None = None,
 ) -> tf.keras.Model:
-    """Espejo de model_defs_pytorch.SimpleCNN, incluidos cabezal y profundidad (ver docstring alla)."""
+    """Espejo de model_defs_pytorch.SimpleCNN, incluidos cabezal y profundidad (ver docstring alla).
+
+    Si se pasa `augmentation`, sus capas van primero y por lo tanto se ejecutan en GPU junto
+    con el resto del modelo. Son capas sin parametros y quedan inactivas en inferencia
+    (training=False), asi que no alteran las predicciones ni el conteo de pesos.
+    """
     if head not in (HEAD_FLATTEN, HEAD_GAP):
         raise ValueError(f"head debe ser '{HEAD_FLATTEN}' o '{HEAD_GAP}', no {head!r}")
     if not 3 <= blocks <= len(BLOCK_FILTERS):
@@ -57,10 +63,10 @@ def build_simple_cnn(
         raise ValueError(f"img_size={img_size} no es divisible por 2^{blocks}")
 
     init = _pytorch_style_init()
-    steps: list = [
-        layers.Input(shape=(img_size, img_size, 3)),
-        layers.Rescaling(1.0 / 127.5, offset=-1.0),
-    ]
+    steps: list = [layers.Input(shape=(img_size, img_size, 3))]
+    if augmentation is not None:
+        steps.append(augmentation)
+    steps.append(layers.Rescaling(1.0 / 127.5, offset=-1.0))
     for out_ch in BLOCK_FILTERS[:blocks]:
         steps += [
             layers.Conv2D(out_ch, 3, padding="same", kernel_initializer=init),

@@ -53,8 +53,19 @@ def count_train_images_per_class(data_dir: Path) -> tuple[list[str], list[int]]:
 
 
 def make_datasets(
-    data_dir: Path, batch_size: int, img_size: int = IMG_SIZE, aug: str = AUG_BASE, mixup: float = 0.0
+    data_dir: Path,
+    batch_size: int,
+    img_size: int = IMG_SIZE,
+    aug: str = AUG_BASE,
+    mixup: float = 0.0,
+    gpu_augment: bool = True,
 ) -> tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset, list[str]]:
+    """Arma los tres splits.
+
+    gpu_augment=True (default) NO aplica la augmentation aca: la aplica el modelo, con lo
+    que corre en GPU. Aplicarla en el pipeline de tf.data la deja en CPU y en instancias
+    con pocos vCPU la GPU se queda esperando datos (se midio GPU-Util entre 0 y 30%).
+    """
     data_dir = Path(data_dir)
     common = dict(label_mode="int", image_size=(img_size, img_size), batch_size=batch_size)
 
@@ -67,10 +78,11 @@ def make_datasets(
     class_names = list(train_ds.class_names)
     n_classes = len(class_names)
 
-    augmentation = build_augmentation(aug)
-    train_ds = train_ds.map(
-        lambda x, y: (augmentation(x, training=True), y), num_parallel_calls=tf.data.AUTOTUNE
-    )
+    if not gpu_augment:
+        augmentation = build_augmentation(aug)
+        train_ds = train_ds.map(
+            lambda x, y: (augmentation(x, training=True), y), num_parallel_calls=tf.data.AUTOTUNE
+        )
 
     if mixup > 0:
         # MixUp: cada batch se mezcla con si mismo invertido; las etiquetas pasan a ser

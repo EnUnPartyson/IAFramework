@@ -36,7 +36,9 @@ from utils.report_common import (  # noqa: E402
 from utils.transforms_pytorch import AUG_BASE, AUG_STRONG, get_eval_transforms, get_train_transforms  # noqa: E402
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-SCHEDULER_PATIENCE = 2
+# paciencia 4 y no 2: con val_accuracy ruidosa (normal en datasets chicos con MixUp), una
+# paciencia corta interpreta el ruido como estancamiento y desploma el LR en pocas epocas
+SCHEDULER_PATIENCE = 4
 SCHEDULER_FACTOR = 0.5
 
 
