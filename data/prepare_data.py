@@ -312,13 +312,30 @@ def _report(task: str, distribution: dict[str, dict[str, int]]) -> None:
         print(f"  {class_name}: {sum(splits.values())} {splits}")
 
 
+PREPARERS = {
+    "detector": ("del detector (Modelo 1)", prepare_detector_data),
+    "dog_breed": ("de raza de perro (Modelo 2)", prepare_dog_breed_data),
+    "cat_breed": ("de raza de gato (Modelo 3)", prepare_cat_breed_data),
+}
+
+
 def main() -> None:
-    print("Preparando datos del detector (Modelo 1)...")
-    _report("detector", prepare_detector_data())
-    print("Preparando datos de raza de perro (Modelo 2)...")
-    _report("dog_breed", prepare_dog_breed_data())
-    print("Preparando datos de raza de gato (Modelo 3)...")
-    _report("cat_breed", prepare_cat_breed_data())
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Prepara los splits train/val/test")
+    parser.add_argument(
+        "--tasks",
+        nargs="+",
+        choices=tuple(PREPARERS),
+        default=list(PREPARERS),
+        help="que tareas regenerar (por defecto las 3); util para rehacer solo la que cambio",
+    )
+    args = parser.parse_args()
+
+    for task in args.tasks:
+        descripcion, preparar = PREPARERS[task]
+        print(f"Preparando datos {descripcion}...")
+        _report(task, preparar())
 
 
 if __name__ == "__main__":

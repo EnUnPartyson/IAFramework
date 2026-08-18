@@ -87,8 +87,9 @@ def download_stanford_dogs() -> None:
 
 
 def download_tsinghua_dogs() -> None:
-    # el zip trae carpetas por raza estilo "nXXXXXXX-nombre_de_raza", igual que Stanford
-    if any(TSINGHUA_DOGS_DIR.rglob("n*-*")):
+    # el zip extrae en low-resolution/ carpetas "<cantidad>-n<synset>-<Raza>"
+    # (ojo: NO el formato "n<synset>-<Raza>" de Stanford; ver BREED_DIR_RE en prepare_data.py)
+    if (TSINGHUA_DOGS_DIR / "low-resolution").is_dir():
         print(f"tsinghua_dogs ya existe en {TSINGHUA_DOGS_DIR}, se omite descarga")
         return
     TSINGHUA_DOGS_DIR.mkdir(parents=True, exist_ok=True)
