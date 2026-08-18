@@ -7,6 +7,7 @@ la comparacion TF vs PyTorch sea simetrica (ver DECISIONS.md).
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -69,6 +70,9 @@ def build_arg_parser(task: str) -> argparse.ArgumentParser:
     )
     parser.add_argument("--img-size", type=int, default=d["img_size"], help="resolucion de entrenamiento/eval")
     parser.add_argument("--blocks", type=int, default=d["blocks"], help="cantidad de bloques convolucionales (3-5)")
+    parser.add_argument(
+        "--workers", type=int, default=default_workers(), help="procesos de carga de datos del DataLoader"
+    )
     # default None a proposito: distingue "no lo paso" de "lo paso igual al default",
     # necesario para que --hparams-from no pise un valor explicito (ver resolve_hparams)
     parser.add_argument("--batch-size", type=int, default=None)
@@ -89,9 +93,17 @@ def build_arg_parser(task: str) -> argparse.ArgumentParser:
     return parser
 
 
+def default_workers() -> int:
+    """Deja un core libre para el proceso principal; la augmentation fuerte es CPU-intensiva
+    y con pocos workers la GPU se queda esperando datos."""
+    return max(2, (os.cpu_count() or 4) - 1)
+
+
 def build_dataloaders(
-    data_dir: Path, batch_size: int, aug: str = AUG_BASE, img_size: int = 128
+    data_dir: Path, batch_size: int, aug: str = AUG_BASE, img_size: int = 128, workers: int | None = None
 ) -> tuple[DataLoader, DataLoader, DataLoader, list[str], list[int]]:
+    if workers is None:
+        workers = default_workers()
     train_ds = ImageFolder(data_dir / "train", transform=get_train_transforms(img_size=img_size, aug=aug))
     val_ds = ImageFolder(data_dir / "val", transform=get_eval_transforms(img_size=img_size))
     test_ds = ImageFolder(data_dir / "test", transform=get_eval_transforms(img_size=img_size))
@@ -101,9 +113,12 @@ def build_dataloaders(
     for _, label in train_ds.samples:
         class_counts[label] += 1
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=2)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=2)
+    # persistent_workers evita respawnear los procesos en cada epoca; pin_memory acelera
+    # la copia CPU->GPU. Ambos importan cuando la carga de datos es el cuello de botella.
+    common = dict(num_workers=workers, pin_memory=True, persistent_workers=workers > 0)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, **common)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, **common)
+    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, **common)
     return train_loader, val_loader, test_loader, class_names, class_counts
 
 
@@ -199,7 +214,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     print(f"[{task}/pytorch] hiperparametros: {hp}")
 
     train_loader, val_loader, test_loader, class_names, class_counts = build_dataloaders(
-        args.data_dir, hp["batch_size"], aug=args.aug, img_size=args.img_size
+        args.data_dir, hp["batch_size"], aug=args.aug, img_size=args.img_size, workers=args.workers
     )
     if expected_classes is not None and tuple(class_names) != tuple(expected_classes):
         raise ValueError(f"Clases en {args.data_dir} ({class_names}) != esperadas ({expected_classes})")
@@ -293,7 +308,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     unknown_maxprob: list[float] | None = None
     if unknown_dir.exists():
         unknown_ds = ImageFolder(unknown_dir, transform=get_eval_transforms(img_size=args.img_size))
-        unknown_loader = DataLoader(unknown_ds, batch_size=hp["batch_size"], shuffle=False, num_workers=2)
+        unknown_loader = DataLoader(unknown_ds, batch_size=hp["batch_size"], shuffle=False, num_workers=args.workers)
         unknown_maxprob, _, _ = collect_probs(model, unknown_loader, device)
     open_set = open_set_analysis(val_maxprob, val_correct, unknown_maxprob)
     print(f"[{task}/pytorch] raza no identificada: {open_set['en_umbral_sugerido']}")
@@ -315,6 +330,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
             "blocks": args.blocks,
             "img_size": args.img_size,
             "n_parametros": n_params,
+            "dataloader_workers": args.workers,
             "aug": args.aug,
             "mixup_alpha": args.mixup,
         },
