@@ -12,7 +12,9 @@ cd "$(dirname "$0")"
 TORCH_PY="venv-torch/bin/python"
 TF_PY="venv-tf/bin/python"
 TMP="$(mktemp -d)"
-EPOCHS="${PREFLIGHT_EPOCHS:-2}"
+# 6 epocas y no 2: con el dataset chico, 2 epocas duran ~15s y la medicion de GPU queda
+# dominada por el arranque (init de CUDA, escaneo del dataset) en vez del entrenamiento
+EPOCHS="${PREFLIGHT_EPOCHS:-6}"
 TASK="${PREFLIGHT_TASK:-cat_breed}"   # el dataset mas chico: itera rapido
 trap 'rm -rf "$TMP"' EXIT
 
@@ -46,7 +48,13 @@ if command -v nvidia-smi >/dev/null 2>&1; then
 else
     fail "no hay nvidia-smi: no se detecta GPU"; exit 1
 fi
-echo "  vCPU: $(nproc)  ·  RAM: $(free -g | awk '/^Mem:/{print $2}') GB  ·  Disco libre: $(df -h . | awk 'NR==2{print $4}')"
+libre_gb=$(df -BG . | awk 'NR==2{gsub("G","",$4); print $4}')
+echo "  vCPU: $(nproc)  ·  RAM: $(free -g | awk '/^Mem:/{print $2}') GB  ·  Disco libre: ${libre_gb} GB"
+if [ "${libre_gb:-0}" -lt 10 ]; then
+    fail "menos de 10 GB libres: el entrenamiento puede quedarse sin espacio"; exit 1
+elif [ "${libre_gb:-0}" -lt 25 ]; then
+    warn "quedan ${libre_gb} GB. Alcanza para entrenar, pero si hay que re-preparar datos puede faltar"
+fi
 
 for par in "PyTorch:$TORCH_PY" "TensorFlow:$TF_PY"; do
     nombre="${par%%:*}"; py="${par##*:}"
@@ -83,16 +91,23 @@ fi
 # ---------------------------------------------------------------- 3. entrenamiento medido
 titulo "3/4 · Entrenamiento de prueba ($TASK, $EPOCHS epocas por framework)"
 echo "  Se mide el uso efectivo de GPU: si queda bajo, la GPU esta esperando datos."
+if [ "$TASK" = "cat_breed" ]; then
+    echo "  OJO: cat_breed tiene ~1.7k imagenes, 20x menos que los otros. El GPU-Util sale"
+    echo "  PESIMISTA porque el arranque pesa mucho. Para un numero representativo del"
+    echo "  trabajo real:  PREFLIGHT_TASK=dog_breed PREFLIGHT_EPOCHS=2 bash preflight.sh"
+fi
 
 medir() {
     local nombre="$1" py="$2" script="$3"; shift 3
     local log="$TMP/${nombre}.log" util="$TMP/${nombre}.util"
+    # cada framework exige su extension: Keras rechaza cualquier cosa que no sea .keras/.h5
+    local ext=".pt"; case "$script" in *tensorflow*) ext=".keras";; esac
 
     nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits -l 1 > "$util" 2>/dev/null &
     local monitor=$!
     local t0=$(date +%s)
     "$py" "$script" --epochs "$EPOCHS" "$@" \
-        --model-out "$TMP/${nombre}.model" --metrics-out "$TMP/${nombre}.json" > "$log" 2>&1
+        --model-out "$TMP/${nombre}${ext}" --metrics-out "$TMP/${nombre}.json" > "$log" 2>&1
     local rc=$?
     local t1=$(date +%s)
     kill "$monitor" 2>/dev/null; wait "$monitor" 2>/dev/null
