@@ -155,7 +155,7 @@ def run_epoch(
                 optimizer.zero_grad()
 
             with torch.amp.autocast(device.type, enabled=use_amp):
-                logits, loss = _forward(model, criterion, images, labels, beta, device)
+                logits, loss, objetivo = _forward(model, criterion, images, labels, beta, device)
 
             if is_train:
                 if use_amp:
@@ -167,8 +167,11 @@ def run_epoch(
                     loss.backward()
                     optimizer.step()
             total_loss += loss.item() * images.size(0)
-            # con mixup el accuracy de train es aproximado (se compara contra la etiqueta dominante)
-            correct += (logits.argmax(dim=1) == labels).sum().item()
+            # con mixup se compara contra la etiqueta DOMINANTE de la mezcla, que es lo que
+            # hace Keras con etiquetas one-hot. Comparar siempre contra la etiqueta original
+            # subestimaba el accuracy a la mitad (Beta(a,a) con a<1 da lam<0.5 la mitad de
+            # las veces) y hacia incomparables las curvas de los dos frameworks.
+            correct += (logits.argmax(dim=1) == objetivo).sum().item()
             total += images.size(0)
     return total_loss / total, correct / total
 
@@ -180,11 +183,15 @@ def _forward(
     labels: torch.Tensor,
     beta: "torch.distributions.Beta | None",
     device: torch.device,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Forward + loss, con o sin MixUp. Separado para que quepa dentro del autocast."""
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Forward + loss + etiqueta contra la cual medir accuracy.
+
+    Sin MixUp la etiqueta es la real; con MixUp es la dominante de la mezcla.
+    Separado en su propia funcion para que quepa dentro del autocast.
+    """
     if beta is None:
         logits = model(images)
-        return logits, criterion(logits, labels)
+        return logits, criterion(logits, labels), labels
 
     # MixUp: mezcla cada imagen con otra del batch; la loss se reparte entre ambas
     # etiquetas. Sin peso por clase a proposito (ver DECISIONS.md): con peso,
@@ -196,7 +203,9 @@ def _forward(
     mixed = lam * images + (1.0 - lam) * images[perm]
     logits = model(mixed)
     loss = lam * F.cross_entropy(logits, labels) + (1.0 - lam) * F.cross_entropy(logits, labels[perm])
-    return logits, loss
+    # la etiqueta dominante es la de mayor peso en la mezcla
+    dominante = labels if lam >= 0.5 else labels[perm]
+    return logits, loss, dominante
 
 
 @torch.no_grad()
