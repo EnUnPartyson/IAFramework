@@ -103,6 +103,9 @@ medir() {
     # cada framework exige su extension: Keras rechaza cualquier cosa que no sea .keras/.h5
     local ext=".pt"; case "$script" in *tensorflow*) ext=".keras";; esac
 
+    echo "  -> $nombre en curso... (log: $log)"
+    echo "     seguirlo en otra terminal con:  tail -f $log"
+
     nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits -l 1 > "$util" 2>/dev/null &
     local monitor=$!
     local t0=$(date +%s)
