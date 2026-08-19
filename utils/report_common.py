@@ -12,7 +12,16 @@ import matplotlib
 matplotlib.use("Agg")  # EC2 no tiene display
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
-from sklearn.metrics import confusion_matrix, f1_score, precision_recall_fscore_support  # noqa: E402
+from sklearn.metrics import (  # noqa: E402
+    auc,
+    average_precision_score,
+    confusion_matrix,
+    f1_score,
+    precision_recall_curve,
+    precision_recall_fscore_support,
+    roc_auc_score,
+    roc_curve,
+)
 
 
 def metrics_from_predictions(labels: list[int], preds: list[int], class_names: list[str]) -> dict:
@@ -175,6 +184,102 @@ def save_metrics_json(report: dict, out_path: Path) -> None:
 
 def file_size_mb(path: Path) -> float:
     return round(path.stat().st_size / (1024 * 1024), 2)
+
+
+def softmax(logits: np.ndarray) -> np.ndarray:
+    """Convierte logits en probabilidades. Se resta el maximo por estabilidad numerica:
+    sin eso, exp() de un logit grande desborda."""
+    logits = np.asarray(logits, dtype=float)
+    exp = np.exp(logits - logits.max(axis=1, keepdims=True))
+    return exp / exp.sum(axis=1, keepdims=True)
+
+
+# las curvas se submuestrean antes de guardarlas: con 20 clases, los puntos crudos harian
+# un JSON de varios MB sin aportar resolucion visible al graficarlas
+PUNTOS_CURVA = 100
+
+
+def _submuestrear(x: np.ndarray, y: np.ndarray, puntos: int = PUNTOS_CURVA) -> list[list[float]]:
+    idx = np.arange(len(x)) if len(x) <= puntos else np.linspace(0, len(x) - 1, puntos).astype(int)
+    return [[round(float(x[i]), 5), round(float(y[i]), 5)] for i in idx]
+
+
+def roc_pr_analysis(labels: list[int], logits: np.ndarray, class_names: list[str]) -> dict:
+    """Curvas ROC y precision-recall sobre test, una-contra-el-resto por clase.
+
+    A diferencia de accuracy o F1, que miden en UN punto de operacion, estas curvas barren
+    todos los umbrales posibles. Por eso hacen falta las probabilidades y no alcanza con las
+    predicciones finales.
+    """
+    probs = softmax(logits)
+    n = len(class_names)
+    binarias = np.eye(n, dtype=int)[np.asarray(labels)]
+
+    por_clase: dict[str, dict] = {}
+    for i, nombre in enumerate(class_names):
+        presentes = int(binarias[:, i].sum())
+        # sin ejemplos de ambos lados la curva no esta definida
+        if presentes == 0 or presentes == len(labels):
+            continue
+        fpr, tpr, _ = roc_curve(binarias[:, i], probs[:, i])
+        prec, rec, _ = precision_recall_curve(binarias[:, i], probs[:, i])
+        por_clase[nombre] = {
+            "roc_auc": round(float(auc(fpr, tpr)), 4),
+            "pr_auc": round(float(average_precision_score(binarias[:, i], probs[:, i])), 4),
+            "soporte": presentes,
+            "curva_roc": _submuestrear(fpr, tpr),
+            "curva_pr": _submuestrear(rec, prec),
+        }
+
+    if not por_clase:
+        return {}
+
+    resultado = {
+        "roc_auc_macro": round(float(np.mean([v["roc_auc"] for v in por_clase.values()])), 4),
+        "pr_auc_macro": round(float(np.mean([v["pr_auc"] for v in por_clase.values()])), 4),
+        "por_clase": por_clase,
+    }
+    try:
+        resultado["roc_auc_ponderado"] = round(
+            float(roc_auc_score(binarias, probs, average="weighted")), 4
+        )
+    except ValueError:
+        pass  # alguna clase sin ejemplos en test
+    return resultado
+
+
+def save_roc_pr_plot(analisis: dict, out_path: Path, title: str) -> None:
+    """Dibuja ROC y PR lado a lado: una linea fina por clase mas el promedio destacado."""
+    if not analisis or not analisis.get("por_clase"):
+        return
+    clases = analisis["por_clase"]
+    fig, (ax_roc, ax_pr) = plt.subplots(1, 2, figsize=(11, 4.6))
+
+    for datos in clases.values():
+        xs, ys = zip(*datos["curva_roc"])
+        ax_roc.plot(xs, ys, linewidth=0.9, alpha=0.45)
+        xs, ys = zip(*datos["curva_pr"])
+        ax_pr.plot(xs, ys, linewidth=0.9, alpha=0.45)
+
+    ax_roc.plot([0, 1], [0, 1], "k--", linewidth=1, alpha=0.6, label="azar")
+    ax_roc.set_xlabel("Tasa de falsos positivos")
+    ax_roc.set_ylabel("Recall (tasa de verdaderos positivos)")
+    ax_roc.set_title(f"ROC · AUC macro = {analisis['roc_auc_macro']:.3f}")
+    ax_roc.legend(loc="lower right", fontsize=8)
+
+    ax_pr.set_xlabel("Recall")
+    ax_pr.set_ylabel("Precision")
+    ax_pr.set_title(f"Precision-Recall · AUC macro = {analisis['pr_auc_macro']:.3f}")
+
+    for ax in (ax_roc, ax_pr):
+        ax.set_xlim(-0.02, 1.02)
+        ax.set_ylim(-0.02, 1.02)
+        ax.grid(alpha=0.25)
+
+    fig.suptitle(f"{title} · una linea por clase ({len(clases)} clases)")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=110)
+    plt.close(fig)
 
 
 def open_set_analysis(

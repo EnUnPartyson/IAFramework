@@ -24,9 +24,11 @@ from utils.report_common import (  # noqa: E402
     metrics_from_predictions,
     open_set_analysis,
     resolve_hparams,
+    roc_pr_analysis,
     save_confusion_matrix_plot,
     save_metrics_json,
     save_open_set_plot,
+    save_roc_pr_plot,
     save_training_curves_plot,
 )
 from utils.transforms_tensorflow import (  # noqa: E402
@@ -203,6 +205,15 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     labels = _labels_from_dataset(test_ds)
     test_metrics = metrics_from_predictions(labels, preds, class_names)
 
+    # curvas ROC y PR: necesitan las probabilidades, por eso se calculan aca donde todavia
+    # estan los logits del test y no hay que volver a pasar el conjunto por el modelo
+    roc_pr = roc_pr_analysis(labels, logits, class_names)
+    if roc_pr:
+        print(
+            f"[{task}/tensorflow] ROC-AUC macro={roc_pr['roc_auc_macro']:.4f} "
+            f"PR-AUC macro={roc_pr['pr_auc_macro']:.4f}"
+        )
+
     # modo forzado del detector (requisito del profesor): perro vs gato ignorando "ninguno"
     forced_metrics = None
     if "ninguno" in class_names:
@@ -273,6 +284,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
         "historia": history,
         "test": test_metrics,
         "raza_no_identificada": open_set,
+        "roc_pr": roc_pr,
     }
     if forced_metrics is not None:
         report["test_modo_forzado"] = forced_metrics
@@ -290,6 +302,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     )
     save_training_curves_plot(history, plots_dir / f"{task}_tensorflow_training_curves.png", f"{task} - TensorFlow")
     save_open_set_plot(open_set, plots_dir / f"{task}_tensorflow_umbral_desconocidas.png", f"{task} - TensorFlow")
+    save_roc_pr_plot(roc_pr, plots_dir / f"{task}_tensorflow_roc_pr.png", f"{task} - TensorFlow")
 
     print(f"[{task}/tensorflow] modelo: {args.model_out}")
     print(f"[{task}/tensorflow] metricas: {args.metrics_out}")

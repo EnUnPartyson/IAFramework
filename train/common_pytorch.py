@@ -29,9 +29,11 @@ from utils.report_common import (  # noqa: E402
     metrics_from_predictions,
     open_set_analysis,
     resolve_hparams,
+    roc_pr_analysis,
     save_confusion_matrix_plot,
     save_metrics_json,
     save_open_set_plot,
+    save_roc_pr_plot,
     save_training_curves_plot,
 )
 from utils.transforms_pytorch import AUG_BASE, AUG_STRONG, get_eval_transforms, get_train_transforms  # noqa: E402
@@ -343,6 +345,15 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     test_logits, test_labels = collect_logits(model, test_loader, device)
     test_metrics = metrics_from_predictions(test_labels, test_logits.argmax(axis=1).tolist(), class_names)
 
+    # curvas ROC y PR: necesitan las probabilidades, por eso se calculan aca donde todavia
+    # estan los logits del test y no hay que volver a pasar el conjunto por el modelo
+    roc_pr = roc_pr_analysis(test_labels, test_logits, class_names)
+    if roc_pr:
+        print(
+            f"[{task}/pytorch] ROC-AUC macro={roc_pr['roc_auc_macro']:.4f} "
+            f"PR-AUC macro={roc_pr['pr_auc_macro']:.4f}"
+        )
+
     # modo forzado del detector (requisito del profesor): perro vs gato ignorando "ninguno"
     forced_metrics = None
     if "ninguno" in class_names:
@@ -391,6 +402,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
         "historia": history,
         "test": test_metrics,
         "raza_no_identificada": open_set,
+        "roc_pr": roc_pr,
     }
     if forced_metrics is not None:
         report["test_modo_forzado"] = forced_metrics
@@ -408,6 +420,7 @@ def train_model(task: str, args: argparse.Namespace, expected_classes: tuple[str
     )
     save_training_curves_plot(history, plots_dir / f"{task}_pytorch_training_curves.png", f"{task} - PyTorch")
     save_open_set_plot(open_set, plots_dir / f"{task}_pytorch_umbral_desconocidas.png", f"{task} - PyTorch")
+    save_roc_pr_plot(roc_pr, plots_dir / f"{task}_pytorch_roc_pr.png", f"{task} - PyTorch")
 
     print(f"[{task}/pytorch] modelo: {args.model_out}")
     print(f"[{task}/pytorch] metricas: {args.metrics_out}")

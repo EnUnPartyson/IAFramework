@@ -34,6 +34,9 @@ def summarize(report: dict) -> dict:
         row["modo_forzado_accuracy"] = report["test_modo_forzado"]["accuracy"]
     if "raza_no_identificada" in report:
         row["umbral_no_identificada"] = report["raza_no_identificada"]["umbral_sugerido"]
+    if report.get("roc_pr"):
+        row["roc_auc_macro"] = report["roc_pr"]["roc_auc_macro"]
+        row["pr_auc_macro"] = report["roc_pr"]["pr_auc_macro"]
     return row
 
 
@@ -87,8 +90,8 @@ def main() -> None:
     print(f"Comparacion guardada en {OUT_PATH}")
     print(f"Grafico comparativo en {PLOT_PATH}\n")
     header = (
-        f"{'modelo':<12} {'framework':<11} {'test_acc':>9} {'f1_macro':>9} {'forzado':>8} "
-        f"{'tiempo_s':>9} {'epocas':>7} {'pesos_MB':>9}"
+        f"{'modelo':<12} {'framework':<11} {'test_acc':>9} {'f1_macro':>9} {'roc_auc':>8} "
+        f"{'pr_auc':>8} {'forzado':>8} {'tiempo_s':>9} {'epocas':>7} {'pesos_MB':>9}"
     )
     print(header)
     print("-" * len(header))
@@ -99,9 +102,12 @@ def main() -> None:
                 print(f"{task:<12} {fw:<11} {'(sin metricas)':>9}")
                 continue
             forced = f"{row['modo_forzado_accuracy']:.4f}" if "modo_forzado_accuracy" in row else "-"
+            roc = f"{row['roc_auc_macro']:.4f}" if "roc_auc_macro" in row else "-"
+            pr = f"{row['pr_auc_macro']:.4f}" if "pr_auc_macro" in row else "-"
             print(
-                f"{task:<12} {fw:<11} {row['test_accuracy']:>9.4f} {row['test_f1_macro']:>9.4f} {forced:>8} "
-                f"{row['tiempo_entrenamiento_seg']:>9.1f} {row['epochs_corridas']:>7} {row['tamano_pesos_mb']:>9.2f}"
+                f"{task:<12} {fw:<11} {row['test_accuracy']:>9.4f} {row['test_f1_macro']:>9.4f} {roc:>8} "
+                f"{pr:>8} {forced:>8} {row['tiempo_entrenamiento_seg']:>9.1f} {row['epochs_corridas']:>7} "
+                f"{row['tamano_pesos_mb']:>9.2f}"
             )
 
     if missing:
