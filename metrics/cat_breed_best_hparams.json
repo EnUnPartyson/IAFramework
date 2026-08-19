@@ -1,0 +1,21 @@
+{
+  "tarea": "cat_breed",
+  "receta": {
+    "head": "gap",
+    "aug": "strong",
+    "mixup": 0.2,
+    "img_size": 160,
+    "blocks": 5,
+    "epochs": 80,
+    "patience": 12
+  },
+  "tune_epochs": 14,
+  "trials": 12,
+  "best_val_f1_macro": 0.38995528411030933,
+  "best_params": {
+    "lr": 0.000528512654232762,
+    "batch_size": 128,
+    "dropout": 0.27070872855532707,
+    "weight_decay": 0.00010457221980802118
+  }
+}

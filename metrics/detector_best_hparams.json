@@ -1,0 +1,21 @@
+{
+  "tarea": "detector",
+  "receta": {
+    "head": "flatten",
+    "aug": "base",
+    "mixup": 0.0,
+    "img_size": 128,
+    "blocks": 4,
+    "epochs": 30,
+    "patience": 6
+  },
+  "tune_epochs": 8,
+  "trials": 12,
+  "best_val_f1_macro": 0.8211139504092645,
+  "best_params": {
+    "lr": 0.00033697700891597784,
+    "batch_size": 64,
+    "dropout": 0.20929486196558733,
+    "weight_decay": 0.009025581144075917
+  }
+}

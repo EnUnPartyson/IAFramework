@@ -1,0 +1,105 @@
+{
+  "teddy": {
+    "train": 5214,
+    "val": 1117,
+    "test": 1118
+  },
+  "golden_retriever": {
+    "train": 3853,
+    "val": 825,
+    "test": 827
+  },
+  "labrador_retriever": {
+    "train": 2625,
+    "val": 562,
+    "test": 564
+  },
+  "chinese_rural_dog": {
+    "train": 2335,
+    "val": 500,
+    "test": 501
+  },
+  "bichon_frise": {
+    "train": 2158,
+    "val": 462,
+    "test": 463
+  },
+  "toy_poodle": {
+    "train": 2153,
+    "val": 461,
+    "test": 462
+  },
+  "cardigan": {
+    "train": 2144,
+    "val": 459,
+    "test": 461
+  },
+  "border_collie": {
+    "train": 1920,
+    "val": 411,
+    "test": 413
+  },
+  "samoyed": {
+    "train": 1826,
+    "val": 391,
+    "test": 393
+  },
+  "miniature_schnauzer": {
+    "train": 1747,
+    "val": 374,
+    "test": 375
+  },
+  "pomeranian": {
+    "train": 1648,
+    "val": 353,
+    "test": 354
+  },
+  "malamute": {
+    "train": 1051,
+    "val": 225,
+    "test": 226
+  },
+  "siberian_husky": {
+    "train": 946,
+    "val": 202,
+    "test": 204
+  },
+  "french_bulldog": {
+    "train": 896,
+    "val": 192,
+    "test": 192
+  },
+  "pug": {
+    "train": 838,
+    "val": 179,
+    "test": 181
+  },
+  "shiba_dog": {
+    "train": 730,
+    "val": 156,
+    "test": 157
+  },
+  "papillon": {
+    "train": 701,
+    "val": 150,
+    "test": 151
+  },
+  "miniature_pinscher": {
+    "train": 661,
+    "val": 141,
+    "test": 143
+  },
+  "chihuahua": {
+    "train": 540,
+    "val": 115,
+    "test": 117
+  },
+  "yorkshire_terrier": {
+    "train": 492,
+    "val": 105,
+    "test": 107
+  },
+  "_desconocidas": {
+    "unknown": 300
+  }
+}

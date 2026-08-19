@@ -1,0 +1,64 @@
+{
+  "detector": {
+    "pytorch": {
+      "test_accuracy": 0.879211931504327,
+      "test_f1_macro": 0.8789591257721018,
+      "tiempo_entrenamiento_seg": 799.1,
+      "epochs_corridas": 30,
+      "tamano_pesos_mb": 17.5,
+      "n_parametros": 4584707,
+      "modo_forzado_accuracy": 0.9245134139926354,
+      "umbral_no_identificada": 0.3
+    },
+    "tensorflow": {
+      "test_accuracy": 0.8725833179893205,
+      "test_f1_macro": 0.8725384469105114,
+      "tiempo_entrenamiento_seg": 1056.1,
+      "epochs_corridas": 30,
+      "tamano_pesos_mb": 17.55,
+      "n_parametros": 4585667,
+      "modo_forzado_accuracy": 0.9118884797475013,
+      "umbral_no_identificada": 0.3
+    }
+  },
+  "dog_breed": {
+    "pytorch": {
+      "test_accuracy": 0.7566473208260224,
+      "test_f1_macro": 0.7232868128510858,
+      "tiempo_entrenamiento_seg": 4212.5,
+      "epochs_corridas": 80,
+      "tamano_pesos_mb": 6.53,
+      "n_parametros": 1707028,
+      "umbral_no_identificada": 0.65
+    },
+    "tensorflow": {
+      "test_accuracy": 0.654744229990552,
+      "test_f1_macro": 0.5933894883717163,
+      "tiempo_entrenamiento_seg": 6511.0,
+      "epochs_corridas": 60,
+      "tamano_pesos_mb": 6.59,
+      "n_parametros": 1709012,
+      "umbral_no_identificada": 0.55
+    }
+  },
+  "cat_breed": {
+    "pytorch": {
+      "test_accuracy": 0.6111111111111112,
+      "test_f1_macro": 0.6012232872678261,
+      "tiempo_entrenamiento_seg": 250.0,
+      "epochs_corridas": 80,
+      "tamano_pesos_mb": 6.53,
+      "n_parametros": 1704972,
+      "umbral_no_identificada": 0.3
+    },
+    "tensorflow": {
+      "test_accuracy": 0.3611111111111111,
+      "test_f1_macro": 0.3386975290171573,
+      "tiempo_entrenamiento_seg": 295.5,
+      "epochs_corridas": 52,
+      "tamano_pesos_mb": 6.58,
+      "n_parametros": 1706956,
+      "umbral_no_identificada": 0.3
+    }
+  }
+}

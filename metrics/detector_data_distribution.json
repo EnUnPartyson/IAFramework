@@ -1,0 +1,17 @@
+{
+  "gato": {
+    "train": 8864,
+    "val": 1899,
+    "test": 1901
+  },
+  "perro": {
+    "train": 8864,
+    "val": 1899,
+    "test": 1901
+  },
+  "ninguno": {
+    "train": 7597,
+    "val": 1628,
+    "test": 1629
+  }
+}

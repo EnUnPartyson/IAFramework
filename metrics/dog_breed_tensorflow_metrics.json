@@ -1,0 +1,1299 @@
+{
+  "framework": "tensorflow",
+  "tarea": "dog_breed",
+  "hiperparametros": {
+    "epochs_max": 80,
+    "epochs_corridas": 60,
+    "batch_size": 128,
+    "lr_inicial": 0.0008962496034208698,
+    "dropout": 0.20284505134240322,
+    "weight_decay": 2.68510434314866e-05,
+    "hparams_origen": "metrics/dog_breed_best_hparams.json",
+    "early_stopping_paciencia": 12,
+    "scheduler": "ReduceLROnPlateau(factor=0.5, patience=4)",
+    "head": "gap",
+    "blocks": 5,
+    "img_size": 160,
+    "n_parametros": 1709012,
+    "precision_mixta": false,
+    "aug": "strong",
+    "mixup_alpha": 0.2
+  },
+  "distribucion_train": {
+    "bichon_frise": 2158,
+    "border_collie": 1920,
+    "cardigan": 2144,
+    "chihuahua": 540,
+    "chinese_rural_dog": 2335,
+    "french_bulldog": 896,
+    "golden_retriever": 3853,
+    "labrador_retriever": 2625,
+    "malamute": 1051,
+    "miniature_pinscher": 661,
+    "miniature_schnauzer": 1747,
+    "papillon": 701,
+    "pomeranian": 1648,
+    "pug": 838,
+    "samoyed": 1826,
+    "shiba_dog": 730,
+    "siberian_husky": 946,
+    "teddy": 5214,
+    "toy_poodle": 2153,
+    "yorkshire_terrier": 492
+  },
+  "tiempo_entrenamiento_seg": 6511.0,
+  "mejor_val_accuracy": 0.6479674577713013,
+  "tamano_pesos_mb": 6.59,
+  "tamano_archivo_modelo_mb": 19.68,
+  "historia": [
+    {
+      "epoch": 1,
+      "train_loss": 2.7103679180145264,
+      "train_acc": 0.17367596924304962,
+      "val_loss": 2.6910905838012695,
+      "val_acc": 0.1917344182729721,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 2,
+      "train_loss": 2.5807442665100098,
+      "train_acc": 0.22460699081420898,
+      "val_loss": 2.6880764961242676,
+      "val_acc": 0.22140921652317047,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 3,
+      "train_loss": 2.4905388355255127,
+      "train_acc": 0.25714948773384094,
+      "val_loss": 2.326310634613037,
+      "val_acc": 0.28373983502388,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 4,
+      "train_loss": 2.427372932434082,
+      "train_acc": 0.27820637822151184,
+      "val_loss": 2.1116244792938232,
+      "val_acc": 0.3395664095878601,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 5,
+      "train_loss": 2.3724238872528076,
+      "train_acc": 0.29662394523620605,
+      "val_loss": 2.0941686630249023,
+      "val_acc": 0.3662601709365845,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 6,
+      "train_loss": 2.2606842517852783,
+      "train_acc": 0.33432912826538086,
+      "val_loss": 2.324754238128662,
+      "val_acc": 0.27845528721809387,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 7,
+      "train_loss": 2.2068369388580322,
+      "train_acc": 0.35271766781806946,
+      "val_loss": 2.0028417110443115,
+      "val_acc": 0.39647695422172546,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 8,
+      "train_loss": 2.1795222759246826,
+      "train_acc": 0.3625790476799011,
+      "val_loss": 1.8471871614456177,
+      "val_acc": 0.42994579672813416,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 9,
+      "train_loss": 2.1321983337402344,
+      "train_acc": 0.37725505232810974,
+      "val_loss": 2.5132405757904053,
+      "val_acc": 0.2497289925813675,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 10,
+      "train_loss": 2.0979316234588623,
+      "train_acc": 0.3876675069332123,
+      "val_loss": 1.805346965789795,
+      "val_acc": 0.4476964771747589,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 11,
+      "train_loss": 2.060216188430786,
+      "train_acc": 0.4072161912918091,
+      "val_loss": 1.6330804824829102,
+      "val_acc": 0.49742546677589417,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 12,
+      "train_loss": 2.0270791053771973,
+      "train_acc": 0.4144381880760193,
+      "val_loss": 1.8533506393432617,
+      "val_acc": 0.43062329292297363,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 13,
+      "train_loss": 2.013719320297241,
+      "train_acc": 0.42244330048561096,
+      "val_loss": 1.8543323278427124,
+      "val_acc": 0.4291327893733978,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 14,
+      "train_loss": 1.9823726415634155,
+      "train_acc": 0.4320146143436432,
+      "val_loss": 1.7887061834335327,
+      "val_acc": 0.4489159882068634,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 15,
+      "train_loss": 1.9515410661697388,
+      "train_acc": 0.44872093200683594,
+      "val_loss": 1.7069225311279297,
+      "val_acc": 0.4895663857460022,
+      "lr": 0.0008962496067397296
+    },
+    {
+      "epoch": 16,
+      "train_loss": 1.8946831226348877,
+      "train_acc": 0.46922674775123596,
+      "val_loss": 1.5406488180160522,
+      "val_acc": 0.5413278937339783,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 17,
+      "train_loss": 1.877586007118225,
+      "train_acc": 0.4683566391468048,
+      "val_loss": 1.4292776584625244,
+      "val_acc": 0.5644986629486084,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 18,
+      "train_loss": 1.868532657623291,
+      "train_acc": 0.4738383889198303,
+      "val_loss": 1.4485137462615967,
+      "val_acc": 0.5653116703033447,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 19,
+      "train_loss": 1.7759506702423096,
+      "train_acc": 0.4915308356285095,
+      "val_loss": 1.6364645957946777,
+      "val_acc": 0.4963414669036865,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 20,
+      "train_loss": 1.8058569431304932,
+      "train_acc": 0.4926909804344177,
+      "val_loss": 1.3800047636032104,
+      "val_acc": 0.5697832107543945,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 21,
+      "train_loss": 1.7909804582595825,
+      "train_acc": 0.4969835877418518,
+      "val_loss": 1.3533542156219482,
+      "val_acc": 0.5873983502388,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 22,
+      "train_loss": 1.7510950565338135,
+      "train_acc": 0.504408597946167,
+      "val_loss": 1.5369594097137451,
+      "val_acc": 0.5233062505722046,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 23,
+      "train_loss": 1.7691271305084229,
+      "train_acc": 0.5095133185386658,
+      "val_loss": 1.3519699573516846,
+      "val_acc": 0.5844173431396484,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 24,
+      "train_loss": 1.7777644395828247,
+      "train_acc": 0.5030744075775146,
+      "val_loss": 1.401037335395813,
+      "val_acc": 0.5785908102989197,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 25,
+      "train_loss": 1.740005373954773,
+      "train_acc": 0.5071060061454773,
+      "val_loss": 1.302471399307251,
+      "val_acc": 0.6029810309410095,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 26,
+      "train_loss": 1.726204514503479,
+      "train_acc": 0.5171413421630859,
+      "val_loss": 1.3643131256103516,
+      "val_acc": 0.5798103213310242,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 27,
+      "train_loss": 1.703040361404419,
+      "train_acc": 0.5225360989570618,
+      "val_loss": 1.3273053169250488,
+      "val_acc": 0.5943089723587036,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 28,
+      "train_loss": 1.7649263143539429,
+      "train_acc": 0.5137478709220886,
+      "val_loss": 1.3519476652145386,
+      "val_acc": 0.5823848247528076,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 29,
+      "train_loss": 1.7702124118804932,
+      "train_acc": 0.506351888179779,
+      "val_loss": 1.323481798171997,
+      "val_acc": 0.6018970012664795,
+      "lr": 0.0004481248033698648
+    },
+    {
+      "epoch": 30,
+      "train_loss": 1.688711404800415,
+      "train_acc": 0.5328325033187866,
+      "val_loss": 1.362796664237976,
+      "val_acc": 0.5840108394622803,
+      "lr": 0.0002240624016849324
+    },
+    {
+      "epoch": 31,
+      "train_loss": 1.6648510694503784,
+      "train_acc": 0.5405476093292236,
+      "val_loss": 1.2028294801712036,
+      "val_acc": 0.6276422739028931,
+      "lr": 0.0002240624016849324
+    },
+    {
+      "epoch": 32,
+      "train_loss": 1.6902799606323242,
+      "train_acc": 0.5293230414390564,
+      "val_loss": 1.2694288492202759,
+      "val_acc": 0.6157181859016418,
+      "lr": 0.0002240624016849324
+    },
+    {
+      "epoch": 33,
+      "train_loss": 1.6933447122573853,
+      "train_acc": 0.5383142828941345,
+      "val_loss": 1.2469971179962158,
+      "val_acc": 0.6168021559715271,
+      "lr": 0.0002240624016849324
+    },
+    {
+      "epoch": 34,
+      "train_loss": 1.6373869180679321,
+      "train_acc": 0.5511630773544312,
+      "val_loss": 1.3191801309585571,
+      "val_acc": 0.6032520532608032,
+      "lr": 0.0002240624016849324
+    },
+    {
+      "epoch": 35,
+      "train_loss": 1.687909483909607,
+      "train_acc": 0.5385172963142395,
+      "val_loss": 1.1678797006607056,
+      "val_acc": 0.6425474286079407,
+      "lr": 0.0002240624016849324
+    },
+    {
+      "epoch": 36,
+      "train_loss": 1.6600520610809326,
+      "train_acc": 0.5419107675552368,
+      "val_loss": 1.1852190494537354,
+      "val_acc": 0.6380758881568909,
+      "lr": 0.0002240624016849324
+    },
+    {
+      "epoch": 37,
+      "train_loss": 1.6605952978134155,
+      "train_acc": 0.5481176376342773,
+      "val_loss": 1.1997547149658203,
+      "val_acc": 0.6383469104766846,
+      "lr": 0.0002240624016849324
+    },
+    {
+      "epoch": 38,
+      "train_loss": 1.6675151586532593,
+      "train_acc": 0.5433610081672668,
+      "val_loss": 1.1973028182983398,
+      "val_acc": 0.6388888955116272,
+      "lr": 0.0002240624016849324
+    },
+    {
+      "epoch": 39,
+      "train_loss": 1.6599761247634888,
+      "train_acc": 0.5458843111991882,
+      "val_loss": 1.1578688621520996,
+      "val_acc": 0.640921413898468,
+      "lr": 0.0002240624016849324
+    },
+    {
+      "epoch": 40,
+      "train_loss": 1.5845181941986084,
+      "train_acc": 0.5711178183555603,
+      "val_loss": 1.166483759880066,
+      "val_acc": 0.6407859325408936,
+      "lr": 0.0001120312008424662
+    },
+    {
+      "epoch": 41,
+      "train_loss": 1.566913366317749,
+      "train_acc": 0.5652589797973633,
+      "val_loss": 1.1683545112609863,
+      "val_acc": 0.6356368660926819,
+      "lr": 0.0001120312008424662
+    },
+    {
+      "epoch": 42,
+      "train_loss": 1.6352112293243408,
+      "train_acc": 0.5582400560379028,
+      "val_loss": 1.1803228855133057,
+      "val_acc": 0.6379404067993164,
+      "lr": 0.0001120312008424662
+    },
+    {
+      "epoch": 43,
+      "train_loss": 1.6829915046691895,
+      "train_acc": 0.5444631576538086,
+      "val_loss": 1.1865004301071167,
+      "val_acc": 0.6333333253860474,
+      "lr": 0.0001120312008424662
+    },
+    {
+      "epoch": 44,
+      "train_loss": 1.5682867765426636,
+      "train_acc": 0.5770056247711182,
+      "val_loss": 1.1582692861557007,
+      "val_acc": 0.6451219320297241,
+      "lr": 5.60156004212331e-05
+    },
+    {
+      "epoch": 45,
+      "train_loss": 1.6157121658325195,
+      "train_acc": 0.5630546808242798,
+      "val_loss": 1.1701315641403198,
+      "val_acc": 0.637398362159729,
+      "lr": 5.60156004212331e-05
+    },
+    {
+      "epoch": 46,
+      "train_loss": 1.6120189428329468,
+      "train_acc": 0.5668832063674927,
+      "val_loss": 1.1719746589660645,
+      "val_acc": 0.6368563771247864,
+      "lr": 5.60156004212331e-05
+    },
+    {
+      "epoch": 47,
+      "train_loss": 1.641818881034851,
+      "train_acc": 0.5576019287109375,
+      "val_loss": 1.2082509994506836,
+      "val_acc": 0.6364498734474182,
+      "lr": 5.60156004212331e-05
+    },
+    {
+      "epoch": 48,
+      "train_loss": 1.5938271284103394,
+      "train_acc": 0.5666801929473877,
+      "val_loss": 1.1382606029510498,
+      "val_acc": 0.6479674577713013,
+      "lr": 5.60156004212331e-05
+    },
+    {
+      "epoch": 49,
+      "train_loss": 1.5659453868865967,
+      "train_acc": 0.5699286460876465,
+      "val_loss": 1.174005150794983,
+      "val_acc": 0.6341463327407837,
+      "lr": 5.60156004212331e-05
+    },
+    {
+      "epoch": 50,
+      "train_loss": 1.5414599180221558,
+      "train_acc": 0.5707987546920776,
+      "val_loss": 1.1229273080825806,
+      "val_acc": 0.6449864506721497,
+      "lr": 5.60156004212331e-05
+    },
+    {
+      "epoch": 51,
+      "train_loss": 1.5932444334030151,
+      "train_acc": 0.5646789073944092,
+      "val_loss": 1.2348977327346802,
+      "val_acc": 0.624119222164154,
+      "lr": 5.60156004212331e-05
+    },
+    {
+      "epoch": 52,
+      "train_loss": 1.5875834226608276,
+      "train_acc": 0.559516191482544,
+      "val_loss": 1.139459252357483,
+      "val_acc": 0.6406503915786743,
+      "lr": 5.60156004212331e-05
+    },
+    {
+      "epoch": 53,
+      "train_loss": 1.5962047576904297,
+      "train_acc": 0.5707987546920776,
+      "val_loss": 1.1691298484802246,
+      "val_acc": 0.6379404067993164,
+      "lr": 2.800780021061655e-05
+    },
+    {
+      "epoch": 54,
+      "train_loss": 1.6268014907836914,
+      "train_acc": 0.5596322417259216,
+      "val_loss": 1.1311616897583008,
+      "val_acc": 0.6452574729919434,
+      "lr": 2.800780021061655e-05
+    },
+    {
+      "epoch": 55,
+      "train_loss": 1.5548824071884155,
+      "train_acc": 0.5781077742576599,
+      "val_loss": 1.1558842658996582,
+      "val_acc": 0.642276406288147,
+      "lr": 2.800780021061655e-05
+    },
+    {
+      "epoch": 56,
+      "train_loss": 1.5868202447891235,
+      "train_acc": 0.5673472881317139,
+      "val_loss": 1.1494306325912476,
+      "val_acc": 0.639837384223938,
+      "lr": 2.800780021061655e-05
+    },
+    {
+      "epoch": 57,
+      "train_loss": 1.6167075634002686,
+      "train_acc": 0.5627936720848083,
+      "val_loss": 1.1651618480682373,
+      "val_acc": 0.6387534141540527,
+      "lr": 1.4003900105308276e-05
+    },
+    {
+      "epoch": 58,
+      "train_loss": 1.5871329307556152,
+      "train_acc": 0.5716978907585144,
+      "val_loss": 1.1655290126800537,
+      "val_acc": 0.6386178731918335,
+      "lr": 1.4003900105308276e-05
+    },
+    {
+      "epoch": 59,
+      "train_loss": 1.5749088525772095,
+      "train_acc": 0.5710887908935547,
+      "val_loss": 1.1563042402267456,
+      "val_acc": 0.6407859325408936,
+      "lr": 1.4003900105308276e-05
+    },
+    {
+      "epoch": 60,
+      "train_loss": 1.6036958694458008,
+      "train_acc": 0.5694645643234253,
+      "val_loss": 1.1604716777801514,
+      "val_acc": 0.6395664215087891,
+      "lr": 1.4003900105308276e-05
+    }
+  ],
+  "test": {
+    "accuracy": 0.654744229990552,
+    "f1_macro": 0.5933894883717163,
+    "f1_por_clase": {
+      "bichon_frise": 0.7417840375586855,
+      "border_collie": 0.7737948084054388,
+      "cardigan": 0.7447257383966245,
+      "chihuahua": 0.29069767441860467,
+      "chinese_rural_dog": 0.38401775804661487,
+      "french_bulldog": 0.4092219020172911,
+      "golden_retriever": 0.76656346749226,
+      "labrador_retriever": 0.678516228748068,
+      "malamute": 0.6666666666666666,
+      "miniature_pinscher": 0.6228373702422145,
+      "miniature_schnauzer": 0.6498002663115846,
+      "papillon": 0.42790697674418604,
+      "pomeranian": 0.640117994100295,
+      "pug": 0.6896551724137931,
+      "samoyed": 0.7610619469026548,
+      "shiba_dog": 0.6119402985074627,
+      "siberian_husky": 0.6113989637305699,
+      "teddy": 0.7279202279202279,
+      "toy_poodle": 0.008528784648187633,
+      "yorkshire_terrier": 0.6606334841628959
+    },
+    "reporte_por_clase": {
+      "bichon_frise": {
+        "precision": 0.6561461794019934,
+        "recall": 0.8531317494600432,
+        "f1": 0.7417840375586855,
+        "n_imagenes_test": 463
+      },
+      "border_collie": {
+        "precision": 0.7904040404040404,
+        "recall": 0.7578692493946732,
+        "f1": 0.7737948084054388,
+        "n_imagenes_test": 413
+      },
+      "cardigan": {
+        "precision": 0.7248459958932238,
+        "recall": 0.7657266811279827,
+        "f1": 0.7447257383966245,
+        "n_imagenes_test": 461
+      },
+      "chihuahua": {
+        "precision": 0.45454545454545453,
+        "recall": 0.21367521367521367,
+        "f1": 0.29069767441860467,
+        "n_imagenes_test": 117
+      },
+      "chinese_rural_dog": {
+        "precision": 0.4325,
+        "recall": 0.34530938123752497,
+        "f1": 0.38401775804661487,
+        "n_imagenes_test": 501
+      },
+      "french_bulldog": {
+        "precision": 0.45806451612903226,
+        "recall": 0.3697916666666667,
+        "f1": 0.4092219020172911,
+        "n_imagenes_test": 192
+      },
+      "golden_retriever": {
+        "precision": 0.7855329949238579,
+        "recall": 0.7484885126964933,
+        "f1": 0.76656346749226,
+        "n_imagenes_test": 827
+      },
+      "labrador_retriever": {
+        "precision": 0.6013698630136987,
+        "recall": 0.7783687943262412,
+        "f1": 0.678516228748068,
+        "n_imagenes_test": 564
+      },
+      "malamute": {
+        "precision": 0.7340425531914894,
+        "recall": 0.6106194690265486,
+        "f1": 0.6666666666666666,
+        "n_imagenes_test": 226
+      },
+      "miniature_pinscher": {
+        "precision": 0.6164383561643836,
+        "recall": 0.6293706293706294,
+        "f1": 0.6228373702422145,
+        "n_imagenes_test": 143
+      },
+      "miniature_schnauzer": {
+        "precision": 0.648936170212766,
+        "recall": 0.6506666666666666,
+        "f1": 0.6498002663115846,
+        "n_imagenes_test": 375
+      },
+      "papillon": {
+        "precision": 0.71875,
+        "recall": 0.304635761589404,
+        "f1": 0.42790697674418604,
+        "n_imagenes_test": 151
+      },
+      "pomeranian": {
+        "precision": 0.6697530864197531,
+        "recall": 0.6129943502824858,
+        "f1": 0.640117994100295,
+        "n_imagenes_test": 354
+      },
+      "pug": {
+        "precision": 0.6632653061224489,
+        "recall": 0.7182320441988951,
+        "f1": 0.6896551724137931,
+        "n_imagenes_test": 181
+      },
+      "samoyed": {
+        "precision": 0.7562814070351759,
+        "recall": 0.7659033078880407,
+        "f1": 0.7610619469026548,
+        "n_imagenes_test": 393
+      },
+      "shiba_dog": {
+        "precision": 0.7387387387387387,
+        "recall": 0.5222929936305732,
+        "f1": 0.6119402985074627,
+        "n_imagenes_test": 157
+      },
+      "siberian_husky": {
+        "precision": 0.6483516483516484,
+        "recall": 0.5784313725490197,
+        "f1": 0.6113989637305699,
+        "n_imagenes_test": 204
+      },
+      "teddy": {
+        "precision": 0.6047337278106509,
+        "recall": 0.9141323792486583,
+        "f1": 0.7279202279202279,
+        "n_imagenes_test": 1118
+      },
+      "toy_poodle": {
+        "precision": 0.2857142857142857,
+        "recall": 0.004329004329004329,
+        "f1": 0.008528784648187633,
+        "n_imagenes_test": 462
+      },
+      "yorkshire_terrier": {
+        "precision": 0.6403508771929824,
+        "recall": 0.6822429906542056,
+        "f1": 0.6606334841628959,
+        "n_imagenes_test": 107
+      }
+    },
+    "confusiones_mas_frecuentes": [
+      {
+        "real": "toy_poodle",
+        "predicho": "teddy",
+        "cantidad": 352,
+        "porcentaje_de_la_clase": 0.7619
+      },
+      {
+        "real": "golden_retriever",
+        "predicho": "teddy",
+        "cantidad": 77,
+        "porcentaje_de_la_clase": 0.0931
+      },
+      {
+        "real": "toy_poodle",
+        "predicho": "bichon_frise",
+        "cantidad": 70,
+        "porcentaje_de_la_clase": 0.1515
+      },
+      {
+        "real": "chinese_rural_dog",
+        "predicho": "labrador_retriever",
+        "cantidad": 59,
+        "porcentaje_de_la_clase": 0.1178
+      },
+      {
+        "real": "golden_retriever",
+        "predicho": "labrador_retriever",
+        "cantidad": 59,
+        "porcentaje_de_la_clase": 0.0713
+      },
+      {
+        "real": "miniature_schnauzer",
+        "predicho": "teddy",
+        "cantidad": 54,
+        "porcentaje_de_la_clase": 0.144
+      },
+      {
+        "real": "pomeranian",
+        "predicho": "samoyed",
+        "cantidad": 46,
+        "porcentaje_de_la_clase": 0.1299
+      },
+      {
+        "real": "chinese_rural_dog",
+        "predicho": "teddy",
+        "cantidad": 43,
+        "porcentaje_de_la_clase": 0.0858
+      },
+      {
+        "real": "chinese_rural_dog",
+        "predicho": "golden_retriever",
+        "cantidad": 41,
+        "porcentaje_de_la_clase": 0.0818
+      },
+      {
+        "real": "french_bulldog",
+        "predicho": "labrador_retriever",
+        "cantidad": 39,
+        "porcentaje_de_la_clase": 0.2031
+      }
+    ],
+    "matriz_confusion": [
+      [
+        395,
+        1,
+        1,
+        0,
+        6,
+        0,
+        0,
+        7,
+        0,
+        0,
+        4,
+        0,
+        2,
+        0,
+        9,
+        0,
+        0,
+        38,
+        0,
+        0
+      ],
+      [
+        1,
+        313,
+        15,
+        0,
+        9,
+        3,
+        7,
+        12,
+        3,
+        1,
+        18,
+        4,
+        2,
+        7,
+        2,
+        1,
+        3,
+        10,
+        0,
+        2
+      ],
+      [
+        0,
+        22,
+        353,
+        2,
+        22,
+        6,
+        11,
+        4,
+        2,
+        2,
+        4,
+        3,
+        10,
+        2,
+        1,
+        8,
+        1,
+        7,
+        0,
+        1
+      ],
+      [
+        0,
+        2,
+        23,
+        25,
+        10,
+        9,
+        1,
+        12,
+        1,
+        13,
+        0,
+        5,
+        6,
+        1,
+        0,
+        2,
+        2,
+        4,
+        0,
+        1
+      ],
+      [
+        18,
+        11,
+        35,
+        3,
+        173,
+        22,
+        41,
+        59,
+        1,
+        9,
+        25,
+        5,
+        25,
+        6,
+        12,
+        5,
+        4,
+        43,
+        1,
+        3
+      ],
+      [
+        1,
+        1,
+        4,
+        7,
+        17,
+        71,
+        1,
+        39,
+        1,
+        12,
+        3,
+        1,
+        3,
+        20,
+        2,
+        0,
+        1,
+        7,
+        0,
+        1
+      ],
+      [
+        1,
+        1,
+        6,
+        1,
+        36,
+        0,
+        619,
+        59,
+        0,
+        7,
+        2,
+        0,
+        4,
+        2,
+        2,
+        4,
+        0,
+        77,
+        1,
+        5
+      ],
+      [
+        8,
+        1,
+        4,
+        0,
+        35,
+        9,
+        35,
+        439,
+        0,
+        2,
+        4,
+        0,
+        0,
+        14,
+        1,
+        0,
+        0,
+        12,
+        0,
+        0
+      ],
+      [
+        1,
+        5,
+        3,
+        0,
+        3,
+        0,
+        3,
+        9,
+        138,
+        0,
+        20,
+        0,
+        0,
+        2,
+        5,
+        0,
+        33,
+        4,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0,
+        3,
+        12,
+        8,
+        2,
+        8,
+        0,
+        90,
+        5,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        6,
+        0,
+        4
+      ],
+      [
+        14,
+        4,
+        2,
+        1,
+        13,
+        6,
+        4,
+        7,
+        3,
+        1,
+        244,
+        0,
+        1,
+        3,
+        0,
+        0,
+        5,
+        54,
+        3,
+        10
+      ],
+      [
+        5,
+        23,
+        12,
+        5,
+        8,
+        2,
+        6,
+        3,
+        3,
+        1,
+        3,
+        46,
+        15,
+        5,
+        3,
+        0,
+        2,
+        8,
+        0,
+        1
+      ],
+      [
+        24,
+        3,
+        7,
+        6,
+        7,
+        0,
+        15,
+        2,
+        1,
+        2,
+        3,
+        0,
+        217,
+        0,
+        46,
+        2,
+        0,
+        15,
+        0,
+        4
+      ],
+      [
+        0,
+        1,
+        4,
+        0,
+        4,
+        14,
+        0,
+        13,
+        0,
+        0,
+        0,
+        0,
+        0,
+        130,
+        1,
+        0,
+        3,
+        11,
+        0,
+        0
+      ],
+      [
+        28,
+        1,
+        0,
+        0,
+        6,
+        0,
+        2,
+        13,
+        1,
+        0,
+        2,
+        0,
+        31,
+        0,
+        301,
+        0,
+        5,
+        3,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        9,
+        0,
+        17,
+        1,
+        19,
+        12,
+        0,
+        3,
+        1,
+        0,
+        0,
+        0,
+        4,
+        82,
+        4,
+        4,
+        0,
+        0
+      ],
+      [
+        0,
+        3,
+        8,
+        0,
+        7,
+        1,
+        1,
+        13,
+        33,
+        0,
+        6,
+        0,
+        0,
+        1,
+        6,
+        5,
+        118,
+        2,
+        0,
+        0
+      ],
+      [
+        35,
+        0,
+        0,
+        0,
+        12,
+        1,
+        12,
+        9,
+        1,
+        0,
+        14,
+        0,
+        3,
+        1,
+        2,
+        1,
+        0,
+        1022,
+        0,
+        5
+      ],
+      [
+        70,
+        2,
+        0,
+        0,
+        2,
+        0,
+        7,
+        9,
+        0,
+        1,
+        8,
+        0,
+        3,
+        1,
+        1,
+        0,
+        0,
+        352,
+        2,
+        4
+      ],
+      [
+        0,
+        1,
+        1,
+        2,
+        1,
+        2,
+        2,
+        1,
+        0,
+        2,
+        10,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        11,
+        0,
+        73
+      ]
+    ],
+    "clases": [
+      "bichon_frise",
+      "border_collie",
+      "cardigan",
+      "chihuahua",
+      "chinese_rural_dog",
+      "french_bulldog",
+      "golden_retriever",
+      "labrador_retriever",
+      "malamute",
+      "miniature_pinscher",
+      "miniature_schnauzer",
+      "papillon",
+      "pomeranian",
+      "pug",
+      "samoyed",
+      "shiba_dog",
+      "siberian_husky",
+      "teddy",
+      "toy_poodle",
+      "yorkshire_terrier"
+    ]
+  },
+  "raza_no_identificada": {
+    "umbral_sugerido": 0.55,
+    "en_umbral_sugerido": {
+      "umbral": 0.55,
+      "cobertura_conocidas": 0.4957,
+      "accuracy_aceptadas": 0.857,
+      "rechazo_desconocidas": 0.8233
+    },
+    "curva": [
+      {
+        "umbral": 0.3,
+        "cobertura_conocidas": 0.8031,
+        "accuracy_aceptadas": 0.7336,
+        "rechazo_desconocidas": 0.4733
+      },
+      {
+        "umbral": 0.35,
+        "cobertura_conocidas": 0.7393,
+        "accuracy_aceptadas": 0.761,
+        "rechazo_desconocidas": 0.5867
+      },
+      {
+        "umbral": 0.4,
+        "cobertura_conocidas": 0.6768,
+        "accuracy_aceptadas": 0.7892,
+        "rechazo_desconocidas": 0.6333
+      },
+      {
+        "umbral": 0.45,
+        "cobertura_conocidas": 0.6167,
+        "accuracy_aceptadas": 0.8119,
+        "rechazo_desconocidas": 0.72
+      },
+      {
+        "umbral": 0.5,
+        "cobertura_conocidas": 0.555,
+        "accuracy_aceptadas": 0.8396,
+        "rechazo_desconocidas": 0.7767
+      },
+      {
+        "umbral": 0.55,
+        "cobertura_conocidas": 0.4957,
+        "accuracy_aceptadas": 0.857,
+        "rechazo_desconocidas": 0.8233
+      },
+      {
+        "umbral": 0.6,
+        "cobertura_conocidas": 0.4411,
+        "accuracy_aceptadas": 0.8765,
+        "rechazo_desconocidas": 0.8567
+      },
+      {
+        "umbral": 0.65,
+        "cobertura_conocidas": 0.3806,
+        "accuracy_aceptadas": 0.8964,
+        "rechazo_desconocidas": 0.8833
+      },
+      {
+        "umbral": 0.7,
+        "cobertura_conocidas": 0.3182,
+        "accuracy_aceptadas": 0.9178,
+        "rechazo_desconocidas": 0.9167
+      },
+      {
+        "umbral": 0.75,
+        "cobertura_conocidas": 0.2503,
+        "accuracy_aceptadas": 0.9361,
+        "rechazo_desconocidas": 0.94
+      },
+      {
+        "umbral": 0.8,
+        "cobertura_conocidas": 0.1812,
+        "accuracy_aceptadas": 0.9589,
+        "rechazo_desconocidas": 0.94
+      },
+      {
+        "umbral": 0.85,
+        "cobertura_conocidas": 0.1244,
+        "accuracy_aceptadas": 0.9804,
+        "rechazo_desconocidas": 0.9633
+      },
+      {
+        "umbral": 0.9,
+        "cobertura_conocidas": 0.0794,
+        "accuracy_aceptadas": 0.9881,
+        "rechazo_desconocidas": 0.98
+      },
+      {
+        "umbral": 0.95,
+        "cobertura_conocidas": 0.0371,
+        "accuracy_aceptadas": 0.9964,
+        "rechazo_desconocidas": 0.99
+      }
+    ]
+  }
+}

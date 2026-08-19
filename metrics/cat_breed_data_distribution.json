@@ -1,0 +1,62 @@
+{
+  "abyssinian": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  },
+  "bengal": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  },
+  "birman": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  },
+  "bombay": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  },
+  "british_shorthair": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  },
+  "egyptian_mau": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  },
+  "maine_coon": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  },
+  "persian": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  },
+  "ragdoll": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  },
+  "russian_blue": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  },
+  "siamese": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  },
+  "sphynx": {
+    "train": 140,
+    "val": 30,
+    "test": 30
+  }
+}

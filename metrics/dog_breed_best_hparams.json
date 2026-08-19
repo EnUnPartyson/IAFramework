@@ -1,0 +1,21 @@
+{
+  "tarea": "dog_breed",
+  "receta": {
+    "head": "gap",
+    "aug": "strong",
+    "mixup": 0.2,
+    "img_size": 160,
+    "blocks": 5,
+    "epochs": 80,
+    "patience": 12
+  },
+  "tune_epochs": 14,
+  "trials": 12,
+  "best_val_f1_macro": 0.4941468513270964,
+  "best_params": {
+    "lr": 0.0008962496034208698,
+    "batch_size": 128,
+    "dropout": 0.20284505134240322,
+    "weight_decay": 2.68510434314866e-05
+  }
+}
