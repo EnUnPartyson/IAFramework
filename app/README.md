@@ -41,6 +41,26 @@ npm install     # solo la primera vez
 npm run dev
 ```
 
+**En el celular, por el navegador** (lo más rápido, no necesita Android Studio):
+
+```bash
+npm run dev
+```
+
+Vite ya está configurado para exponerse en la red, así que imprime dos direcciones: usá la
+que dice `Network:`, por ejemplo `http://192.168.100.194:5173`, y abrila en el celular.
+
+La cámara **funciona sobre HTTP sin certificado**: Capacitor usa un `<input capture>` que
+abre la cámara nativa del teléfono, no `getUserMedia` (que sí exigiría HTTPS).
+
+Antes hay que abrir los dos puertos en el firewall de Windows, una sola vez, desde una
+consola **como administrador**:
+
+```bat
+netsh advfirewall firewall add rule name="Clasificador API" dir=in action=allow protocol=TCP localport=8000
+netsh advfirewall firewall add rule name="Clasificador Vite" dir=in action=allow protocol=TCP localport=5173
+```
+
 **En el celular como app nativa** (usa la cámara real vía Capacitor):
 
 ```bash

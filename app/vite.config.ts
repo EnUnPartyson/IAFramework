@@ -10,6 +10,12 @@ export default defineConfig({
     react(),
     legacy()
   ],
+  // host: true expone el servidor de desarrollo en la red local, para poder abrir la app
+  // desde el celular. Sin esto Vite solo escucha en localhost y el telefono no la ve.
+  server: {
+    host: true,
+    port: 5173,
+  },
   test: {
     globals: true,
     environment: 'jsdom',
