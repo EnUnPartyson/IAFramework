@@ -2,9 +2,9 @@
 data/raw/
 data/processed/
 
-# Pesos de modelos: los 6 finales SI se versionan, via Git LFS (ver .gitattributes),
-# porque el equipo necesita compartirlos. Todo lo demas (checkpoints intermedios, pesos
-# sueltos fuera de models/) sigue fuera del repo.
+# Pesos de modelos: los 6 finales SI se versionan (commit directo, ~124MB una sola vez)
+# porque el equipo necesita compartirlos y no habra mas reentrenamientos. Todo lo demas
+# (checkpoints intermedios, pesos sueltos fuera de models/) sigue fuera del repo.
 *.pt
 *.pth
 *.h5
