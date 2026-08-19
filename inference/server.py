@@ -21,6 +21,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from PIL import Image, UnidentifiedImageError
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -56,6 +57,45 @@ def _demo_prediction() -> Prediction:
         raza_identificada=conf >= 0.45,
         top_razas=[(razas[0], conf), (razas[1], conf * 0.5), (razas[2], conf * 0.2)],
     )
+
+
+@app.get("/", response_class=HTMLResponse)
+def inicio() -> str:
+    """Pagina de estado: es lo que ve quien abre la URL base en el navegador."""
+    if _state["demo"]:
+        estado, color = "Modo demo (respuestas simuladas)", "#A9700F"
+    elif _state["pipeline"] is not None:
+        estado, color = "Modelos cargados y listos", "#2E7D53"
+    else:
+        estado, color = f"Sin modelos: {_state['error'] or 'error desconocido'}", "#B03A2E"
+
+    return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clasificador de Mascotas - API</title>
+<style>
+ body{{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;max-width:34rem;margin:0 auto;
+      padding:2rem 1.25rem;line-height:1.6;color:#12181A;background:#FBFCFC}}
+ h1{{font-size:1.5rem;margin:0 0 .25rem}}
+ .estado{{color:{color};font-weight:600;margin:0 0 1.5rem}}
+ a{{color:#0F5C63}}
+ table{{width:100%;border-collapse:collapse;font-size:.95rem}}
+ td{{padding:.5rem 0;border-bottom:1px solid #D3DADA;vertical-align:top}}
+ td:first-child{{white-space:nowrap;padding-right:1rem;font-family:ui-monospace,monospace}}
+ .pie{{margin-top:1.5rem;font-size:.9rem;color:#4A585B}}
+ @media(prefers-color-scheme:dark){{body{{background:#0E1315;color:#E4EAEA}}
+   td{{border-color:#2A3538}} a{{color:#5FBDC0}} .pie{{color:#A5B3B5}}}}
+</style></head><body>
+<h1>Clasificador de Mascotas</h1>
+<p class="estado">{estado}</p>
+<table>
+ <tr><td><a href="/docs">/docs</a></td><td>Probar la API desde el navegador: subir una foto y ver la prediccion</td></tr>
+ <tr><td><a href="/health">/health</a></td><td>Estado del servidor</td></tr>
+ <tr><td><a href="/info">/info</a></td><td>Modelos cargados, clases y umbrales</td></tr>
+ <tr><td>POST /predict</td><td>Recibe una imagen y devuelve especie, raza y confianza</td></tr>
+</table>
+<p class="pie">Si llegaste aca desde el celular, la conexion funciona: pone esta misma
+direccion en los ajustes de la app.</p>
+</body></html>"""
 
 
 @app.get("/health")
