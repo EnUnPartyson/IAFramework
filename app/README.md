@@ -61,16 +61,40 @@ netsh advfirewall firewall add rule name="Clasificador API" dir=in action=allow 
 netsh advfirewall firewall add rule name="Clasificador Vite" dir=in action=allow protocol=TCP localport=5173
 ```
 
-**En el celular como app nativa** (usa la cámara real vía Capacitor):
+**En el celular como app nativa** (APK instalable):
+
+Requiere Android Studio. Al abrirlo por primera vez descarga el SDK de Android, que son
+varios GB — conviene dejarlo terminar antes de seguir.
 
 ```bash
-npm run build
-npx cap add android          # solo la primera vez
-npx cap sync
-npx cap open android         # abre Android Studio para compilar e instalar
+npm run build                # compila la app web
+npx cap add android          # solo la primera vez: crea el proyecto Android
+npx cap sync                 # copia el build al proyecto nativo
+npx cap open android         # abre Android Studio
 ```
 
-Requiere Android Studio instalado. Para iOS, `npx cap add ios` y Xcode (solo en Mac).
+En Android Studio: conectá el celular por USB con **depuración USB** activada (en Ajustes →
+Opciones de desarrollador; se habilitan tocando 7 veces "Número de compilación" en
+Información del teléfono), elegilo en la lista de dispositivos y dale al botón Run.
+
+Cada vez que cambies código: `npm run build && npx cap sync`, y Run de nuevo.
+
+Para iOS hace falta `npx cap add ios` y Xcode, que solo corre en Mac.
+
+### Si la app abre pero no conecta con la API
+
+Android bloquea HTTP sin cifrar desde la versión 9. `capacitor.config.ts` ya trae
+`server.cleartext: true` para permitirlo, pero si aun así falla, hay que agregar la IP a
+`android/app/src/main/res/xml/network_security_config.xml`:
+
+```xml
+<domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="true">192.168.100.194</domain>
+</domain-config>
+```
+
+Después `npx cap sync` y compilar de nuevo. La causa es que la API va por HTTP plano; con
+HTTPS el problema desaparecería.
 
 ## 3. Configurar la URL del servidor
 
