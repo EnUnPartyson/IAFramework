@@ -87,11 +87,25 @@ Requiere Android Studio. Al abrirlo por primera vez descarga el SDK de Android, 
 varios GB — conviene dejarlo terminar antes de seguir.
 
 ```bash
+npm install                  # incluye @capacitor/android
 npm run build                # compila la app web
 npx cap add android          # solo la primera vez: crea el proyecto Android
 npx cap sync                 # copia el build al proyecto nativo
 npx cap open android         # abre Android Studio
 ```
+
+> **Si regeneras `android/` desde cero** (se borra o se clona el repo limpio, porque esa
+> carpeta no se versiona), hay que volver a agregar una linea al manifest generado. Sin
+> ella la app abre pero ninguna peticion a la API llega, con un error poco descriptivo:
+>
+> En `android/app/src/main/AndroidManifest.xml`, dentro de `<application>`:
+> ```xml
+> android:usesCleartextTraffic="true"
+> ```
+>
+> Hace falta porque Android bloquea HTTP sin cifrar desde la version 9 y la API corre en
+> `http://<ip-lan>:8000`. Lo otro que se necesita, `allowMixedContent`, ya esta en
+> `capacitor.config.ts` y lo aplica `cap sync` solo.
 
 En Android Studio: conectá el celular por USB con **depuración USB** activada (en Ajustes →
 Opciones de desarrollador; se habilitan tocando 7 veces "Número de compilación" en
