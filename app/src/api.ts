@@ -56,7 +56,19 @@ export async function verificarEstado(): Promise<Estado> {
   return res.json();
 }
 
-export async function clasificar(fotoBase64: string): Promise<Prediccion> {
+/** Modo de clasificacion: un framework puntual, o los dos para compararlos. */
+export type Modo = 'pytorch' | 'tensorflow' | 'comparar';
+
+/**
+ * Clasifica la foto y devuelve un resultado POR FRAMEWORK.
+ *
+ * Siempre devuelve un objeto indexado por framework —aunque se pida uno solo— para que la
+ * pantalla no tenga que distinguir entre "un resultado" y "varios".
+ */
+export async function clasificar(
+  fotoBase64: string,
+  modo: Modo = 'pytorch',
+): Promise<Record<string, Prediccion>> {
   const base = await obtenerUrlApi();
 
   // Capacitor devuelve la foto en base64; la API espera multipart/form-data
@@ -67,10 +79,13 @@ export async function clasificar(fotoBase64: string): Promise<Prediccion> {
   const formulario = new FormData();
   formulario.append('file', new Blob([bytes], { type: 'image/jpeg' }), 'foto.jpg');
 
-  const res = await fetchConTimeout(`${base}/predict`, { method: 'POST', body: formulario }, 30000);
+  const ruta = modo === 'comparar' ? '/predict/comparar' : `/predict?framework=${modo}`;
+  const res = await fetchConTimeout(`${base}${ruta}`, { method: 'POST', body: formulario }, 60000);
   if (!res.ok) {
     const detalle = await res.json().catch(() => ({ detail: `error ${res.status}` }));
     throw new Error(detalle.detail ?? `El servidor respondio ${res.status}`);
   }
-  return res.json();
+
+  const datos = await res.json();
+  return modo === 'comparar' ? datos.frameworks : { [modo]: datos };
 }

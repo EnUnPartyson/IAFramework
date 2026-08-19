@@ -2,18 +2,23 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import {
   IonBadge, IonButton, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent,
   IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonModal, IonNote, IonPage,
-  IonProgressBar, IonSpinner, IonTitle, IonToolbar, useIonToast,
+  IonProgressBar, IonSegment, IonSegmentButton, IonSpinner, IonTitle, IonToolbar,
+  useIonToast,
 } from '@ionic/react';
 import { camera, images, settingsOutline } from 'ionicons/icons';
 import { useEffect, useRef, useState } from 'react';
-import { clasificar, guardarUrlApi, obtenerUrlApi, verificarEstado, type Prediccion } from '../api';
+import {
+  clasificar, guardarUrlApi, obtenerUrlApi, verificarEstado,
+  type Modo, type Prediccion,
+} from '../api';
 import './Home.css';
 
 const EMOJI: Record<string, string> = { perro: '🐶', gato: '🐱', ninguno: '🚫' };
 
 const Home: React.FC = () => {
   const [foto, setFoto] = useState<string | null>(null);
-  const [resultado, setResultado] = useState<Prediccion | null>(null);
+  const [resultados, setResultados] = useState<Record<string, Prediccion> | null>(null);
+  const [modo, setModo] = useState<Modo>('pytorch');
   const [cargando, setCargando] = useState(false);
   const [conectado, setConectado] = useState<boolean | null>(null);
   const [urlApi, setUrlApi] = useState('');
@@ -49,10 +54,10 @@ const Home: React.FC = () => {
       if (!imagen.base64String) return;
 
       setFoto(`data:image/jpeg;base64,${imagen.base64String}`);
-      setResultado(null);
+      setResultados(null);
       setCargando(true);
       try {
-        setResultado(await clasificar(imagen.base64String));
+        setResultados(await clasificar(imagen.base64String, modo));
         setConectado(true);
       } catch (error) {
         setConectado(false);
@@ -96,6 +101,16 @@ const Home: React.FC = () => {
           </IonCard>
         )}
 
+        <IonSegment
+          value={modo}
+          onIonChange={(e) => { setModo(e.detail.value as Modo); setResultados(null); }}
+          className="selector-modo"
+        >
+          <IonSegmentButton value="pytorch"><IonLabel>PyTorch</IonLabel></IonSegmentButton>
+          <IonSegmentButton value="tensorflow"><IonLabel>TensorFlow</IonLabel></IonSegmentButton>
+          <IonSegmentButton value="comparar"><IonLabel>Comparar</IonLabel></IonSegmentButton>
+        </IonSegment>
+
         <div className="botones-captura">
           <IonButton expand="block" size="large" onClick={() => tomarFoto(CameraSource.Camera)}>
             <IonIcon slot="start" icon={camera} />
@@ -121,11 +136,14 @@ const Home: React.FC = () => {
           </div>
         )}
 
-        {resultado && !cargando && (
-          <IonCard>
+        {resultados && !cargando && Object.entries(resultados).map(([framework, resultado]) => (
+          <IonCard key={framework}>
             <IonCardHeader>
+              {Object.keys(resultados).length > 1 && (
+                <IonBadge color="medium" className="badge-framework">{framework}</IonBadge>
+              )}
               <IonCardTitle>
-                {EMOJI[resultado.especie] ?? '❓'} {resultado.resumen}
+                {EMOJI[resultado.especie] ?? '?'} {resultado.resumen}
               </IonCardTitle>
             </IonCardHeader>
             <IonCardContent>
@@ -158,7 +176,7 @@ const Home: React.FC = () => {
               )}
             </IonCardContent>
           </IonCard>
-        )}
+        ))}
 
         <IonModal ref={modal} isOpen={ajustesAbiertos} onDidDismiss={() => setAjustesAbiertos(false)}>
           <IonHeader>

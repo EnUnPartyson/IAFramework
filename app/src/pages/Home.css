@@ -33,3 +33,14 @@
   font-size: 0.85rem;
   line-height: 1.4;
 }
+
+.selector-modo {
+  margin-bottom: 14px;
+}
+
+.badge-framework {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}

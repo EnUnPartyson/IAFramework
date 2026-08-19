@@ -38,7 +38,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_state: dict = {"pipeline": None, "demo": False, "error": None}
+# puede haber uno o los dos frameworks cargados a la vez: para inferencia en CPU
+# torch y tensorflow conviven sin el conflicto de CUDA que obliga a venvs separados
+_state: dict = {"pipelines": {}, "demo": False, "error": None}
+
+
+def _principal():
+    """El pipeline que responde /predict cuando no se pide uno puntual."""
+    return next(iter(_state["pipelines"].values()), None)
 
 DEMO_RAZAS = ["beagle", "boxer", "pug", "samoyed", "chihuahua"]
 
@@ -101,8 +108,9 @@ direccion en los ajustes de la app.</p>
 @app.get("/health")
 def health() -> dict:
     return {
-        "ok": _state["pipeline"] is not None or _state["demo"],
+        "ok": bool(_state["pipelines"]) or _state["demo"],
         "modo": "demo" if _state["demo"] else "modelos reales",
+        "frameworks": sorted(_state["pipelines"]),
         "error": _state["error"],
     }
 
@@ -111,13 +119,13 @@ def health() -> dict:
 def info() -> dict:
     if _state["demo"]:
         return {"modo": "demo", "razas_demo": DEMO_RAZAS}
-    if _state["pipeline"] is None:
+    if not _state["pipelines"]:
         raise HTTPException(status_code=503, detail=_state["error"] or "modelos no cargados")
-    return _state["pipeline"].describe()
+    return {fw: p.describe() for fw, p in _state["pipelines"].items()}
 
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)) -> dict:
+async def predict(file: UploadFile = File(...), framework: str | None = None) -> dict:
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="archivo vacio")
@@ -125,15 +133,43 @@ async def predict(file: UploadFile = File(...)) -> dict:
     if _state["demo"]:
         return _demo_prediction().to_dict()
 
-    if _state["pipeline"] is None:
+    pipeline = _state["pipelines"].get(framework) if framework else _principal()
+    if pipeline is None:
+        detalle = (
+            f"framework '{framework}' no cargado; disponibles: {sorted(_state['pipelines'])}"
+            if framework
+            else _state["error"] or "modelos no cargados"
+        )
+        raise HTTPException(status_code=503, detail=detalle)
+
+    return pipeline.predict(_abrir(raw)).to_dict()
+
+
+@app.post("/predict/comparar")
+async def predict_comparar(file: UploadFile = File(...)) -> dict:
+    """Corre la MISMA imagen por todos los frameworks cargados y devuelve cada resultado.
+
+    Es lo que permite mostrar la comparacion PyTorch vs TensorFlow en vivo.
+    """
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="archivo vacio")
+
+    if _state["demo"]:
+        return {"frameworks": {fw: _demo_prediction().to_dict() for fw in ("pytorch", "tensorflow")}}
+
+    if not _state["pipelines"]:
         raise HTTPException(status_code=503, detail=_state["error"] or "modelos no cargados")
 
+    image = _abrir(raw)
+    return {"frameworks": {fw: p.predict(image).to_dict() for fw, p in _state["pipelines"].items()}}
+
+
+def _abrir(raw: bytes) -> Image.Image:
     try:
-        image = Image.open(io.BytesIO(raw))
+        return Image.open(io.BytesIO(raw))
     except (UnidentifiedImageError, OSError):
         raise HTTPException(status_code=400, detail="el archivo no es una imagen valida")
-
-    return _state["pipeline"].predict(image).to_dict()
 
 
 def _local_ip() -> str:
@@ -154,21 +190,42 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--demo", action="store_true", help="respuestas simuladas, sin cargar pesos")
     parser.add_argument("--forced", action="store_true", help="modo forzado: ignora la clase 'ninguno'")
+    parser.add_argument(
+        "--frameworks",
+        choices=("pytorch", "tensorflow", "ambos"),
+        default="pytorch",
+        help="que modelos cargar. 'ambos' habilita /predict/comparar y requiere torch y "
+        "tensorflow en el mismo venv (para inferencia en CPU conviven sin problema)",
+    )
     args = parser.parse_args()
 
     _state["demo"] = args.demo
     if args.demo:
         print("MODO DEMO: respuestas simuladas, no se cargan modelos")
     else:
-        try:
-            _state["pipeline"] = PetPipeline(forced=args.forced)
-            print("Modelos cargados:", _state["pipeline"].describe())
-        except FileNotFoundError as exc:
+        errores = []
+        pedidos = ("pytorch", "tensorflow") if args.frameworks == "ambos" else (args.frameworks,)
+
+        for fw in pedidos:
+            try:
+                if fw == "pytorch":
+                    _state["pipelines"][fw] = PetPipeline(forced=args.forced)
+                else:
+                    # se importa aca y no arriba: si solo se pide PyTorch, no hace falta
+                    # tener tensorflow instalado
+                    from inference.pipeline_tensorflow import PetPipelineTF
+
+                    _state["pipelines"][fw] = PetPipelineTF(forced=args.forced)
+                print(f"  [{fw}] modelos cargados")
+            except (FileNotFoundError, ImportError) as exc:
+                errores.append(f"{fw}: {exc}")
+                print(f"  [{fw}] NO cargado -> {exc}")
+
+        if not _state["pipelines"]:
             # arranca igual para no bloquear el desarrollo de la app antes de tener pesos
-            _state["error"] = str(exc)
-            print(f"\nAVISO: {exc}")
-            print("El servidor arranca igual; /predict devolvera 503 hasta que existan los pesos.")
-            print("Para desarrollar la app sin pesos: python inference/server.py --demo\n")
+            _state["error"] = " | ".join(errores)
+            print("AVISO: no se cargo ningun modelo. /predict devolvera 503.")
+            print("Para desarrollar la app sin pesos: python inference/server.py --demo")
 
     ip = _local_ip()
     print(f"\nAPI escuchando en http://{args.host}:{args.port}")

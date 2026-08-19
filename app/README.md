@@ -18,6 +18,26 @@ la manda a la API de Python que corre los modelos, y muestra especie + raza + el
 Los modelos son `.pt` de PyTorch: no corren en JavaScript, por eso la app es un cliente
 liviano y la inferencia pasa en la laptop. La app no necesita GPU ni Python.
 
+## Elegir framework desde la app
+
+Arriba de los botones de captura hay un selector con tres opciones:
+
+| Opción | Qué hace |
+|---|---|
+| **PyTorch** | Clasifica solo con los modelos `.pt` |
+| **TensorFlow** | Clasifica solo con los `.keras` |
+| **Comparar** | Corre **la misma foto** por ambos y muestra los dos resultados |
+
+Para que "Comparar" y "TensorFlow" funcionen, la API tiene que arrancar con
+`--frameworks ambos` y el venv necesita torch **y** tensorflow. Para inferencia en CPU
+conviven sin problema (el conflicto de CUDA que obliga a venvs separados solo aplica al
+entrenamiento en GPU):
+
+```bat
+venv-torch\Scripts\python.exe -m pip install tensorflow
+venv-torch\Scripts\python.exe inference\server.py --frameworks ambos
+```
+
 ## 1. Levantar la API (en la laptop, con los pesos ya bajados de la EC2)
 
 ```bash
