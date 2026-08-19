@@ -143,7 +143,7 @@ Imprime al arrancar la IP a usar desde el celular. Documentación interactiva pa
 desde el navegador en `http://localhost:8000/docs`.
 
 > **Rutas según la consola.** Los ejemplos de arriba son para `cmd.exe` (barras invertidas).
-> En **PowerShell** hay que anteponer `.\`: `.env-torch\Scripts\python.exe ...`.
+> En **PowerShell** hay que anteponer `.\`: `.\venv-torch\Scripts\python.exe ...`.
 > En **Git Bash** funcionan las barras normales: `venv-torch/Scripts/python.exe ...`.
 > Los bloques con `venv-torch/bin/python` de más arriba son para la EC2 (Linux).
 
