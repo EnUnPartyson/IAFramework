@@ -235,9 +235,9 @@ def main() -> None:
 
                     _state["pipelines"][fw] = PetPipelineTF(forced=args.forced, tta=not args.sin_tta)
                 print(f"  [{fw}] modelos cargados")
-            except (FileNotFoundError, ImportError) as exc:
+            except Exception as exc:  # noqa: BLE001 -- en la nube, un modelo roto no debe tirar el server
                 errores.append(f"{fw}: {exc}")
-                print(f"  [{fw}] NO cargado -> {exc}")
+                print(f"  [{fw}] NO cargado -> {type(exc).__name__}: {exc}")
 
         if not _state["pipelines"]:
             # arranca igual para no bloquear el desarrollo de la app antes de tener pesos

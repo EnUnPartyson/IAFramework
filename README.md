@@ -184,6 +184,13 @@ Datasets extra: [Cat Breeds Dataset](https://www.kaggle.com/datasets/ma7555/cat-
 Para probar los modelos pro en inferencia: `PetPipeline(pro=True)` o
 `train/evaluar_robustez.py --pro`.
 
+## Servidor en la nube (app disponible siempre)
+
+Para que la app funcione sin depender de la laptop, el servidor de inferencia se puede subir
+gratis a Hugging Face Spaces (o a una EC2 chica): ver [`deploy/README.md`](deploy/README.md).
+El contenedor clona este repo —los pesos ya están versionados— e instala solo las
+dependencias de CPU (`requirements-inference-cpu.txt`).
+
 ## Documentación
 
 - `CLAUDE.md` — contexto para Claude Code

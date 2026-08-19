@@ -1,0 +1,11 @@
+# Dependencias MINIMAS para correr inference/server.py en CPU (nube o laptop sin GPU).
+# No sirve para entrenar: para eso estan requirements-torch.txt / requirements-tf.txt.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+tensorflow-cpu
+fastapi
+uvicorn[standard]
+python-multipart
+pillow
+numpy
