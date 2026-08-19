@@ -16,7 +16,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision.datasets import ImageFolder
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -120,6 +120,7 @@ def build_dataloaders(
     img_size: int = 128,
     workers: int | None = None,
     norm: str = NORM_SIMPLE,
+    balanced: bool = False,
 ) -> tuple[DataLoader, DataLoader, DataLoader, list[str], list[int]]:
     if workers is None:
         workers = default_workers()
@@ -135,7 +136,15 @@ def build_dataloaders(
     # persistent_workers evita respawnear los procesos en cada epoca; pin_memory acelera
     # la copia CPU->GPU. Ambos importan cuando la carga de datos es el cuello de botella.
     common = dict(num_workers=workers, pin_memory=True, persistent_workers=workers > 0)
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, **common)
+    if balanced:
+        # sampling balanceado (modo pro): cada clase aparece ~igual por epoca aunque el disco
+        # este desparejo. A diferencia del peso en la loss, convive bien con MixUp (que en
+        # este repo usa cross entropy SIN peso por paridad con TF, ver _forward)
+        sample_weights = [1.0 / class_counts[label] for _, label in train_ds.samples]
+        sampler = WeightedRandomSampler(sample_weights, num_samples=len(train_ds), replacement=True)
+        train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=sampler, **common)
+    else:
+        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, **common)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, **common)
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, **common)
     return train_loader, val_loader, test_loader, class_names, class_counts

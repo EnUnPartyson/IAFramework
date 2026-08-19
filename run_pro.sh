@@ -15,6 +15,7 @@
 #   SKIP_DATA=1      no descargar ni preparar datos (ya preparados)
 #   ARCH=<nombre>    backbone para los 3 modelos (default convnext_tiny;
 #                    tambien: resnet18, resnet50, efficientnet_v2_s)
+#   BATCH=N          batch size (default 64; en GPU de 24GB -- A10G/L4 -- subir a 128)
 #   ALLOW_CPU=1      permitir entrenar sin GPU (por defecto aborta)
 #   TORCH_INDEX_URL  indice extra de pip para wheels de torch
 set -euo pipefail
@@ -23,6 +24,7 @@ cd "$(dirname "$0")"
 PYTHON=${PYTHON:-python3}
 TORCH_PY="venv-torch/bin/python"
 ARCH=${ARCH:-convnext_tiny}
+BATCH=${BATCH:-64}
 
 log() { echo ""; echo "=== [$(date '+%H:%M:%S')] $* ==="; }
 
@@ -61,7 +63,7 @@ fi
 
 for task in detector dog_breed cat_breed; do
     log "Entrenando ${task}_pro (arch=$ARCH, transfer learning)"
-    "$TORCH_PY" train/train_pro_pytorch.py --task "$task" --arch "$ARCH"
+    "$TORCH_PY" train/train_pro_pytorch.py --task "$task" --arch "$ARCH" --batch-size "$BATCH"
 done
 
 log "Comparacion base vs pro"

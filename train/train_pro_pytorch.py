@@ -25,6 +25,7 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -35,7 +36,6 @@ from train.common_pytorch import (  # noqa: E402
     build_dataloaders,
     class_weights_from_counts,
     collect_logits,
-    collect_probs,
     default_workers,
     run_epoch,
 )
@@ -57,18 +57,27 @@ from utils.report_common import (  # noqa: E402
     save_open_set_plot,
     save_roc_pr_plot,
     save_training_curves_plot,
+    softmax,
 )
-from utils.transforms_pytorch import AUG_BASE, AUG_STRONG, NORM_IMAGENET, get_eval_transforms  # noqa: E402
+from utils.transforms_pytorch import (  # noqa: E402
+    AUG_BASE,
+    AUG_PRODUCCION,
+    AUG_STRONG,
+    NORM_IMAGENET,
+    get_eval_transforms,
+)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
 # recetas pro por tarea. Con transfer learning hacen falta muchas menos epocas que desde
 # cero: el backbone ya sabe ver; solo se adapta. img_size 224 = la resolucion nativa de los
 # preentrenados de torchvision.
+# aug "produccion" en las 3 tareas: strong + degradaciones de camara real (JPEG, perspectiva,
+# gris). El modelo pro existe para produccion, no para ganar un benchmark de test limpio.
 PRO_DEFAULTS = {
-    "detector": {"epochs": 15, "warmup_epochs": 2, "aug": "base", "mixup": 0.0, "patience": 5},
-    "dog_breed": {"epochs": 30, "warmup_epochs": 3, "aug": "strong", "mixup": 0.2, "patience": 8},
-    "cat_breed": {"epochs": 30, "warmup_epochs": 3, "aug": "strong", "mixup": 0.2, "patience": 8},
+    "detector": {"epochs": 15, "warmup_epochs": 2, "aug": "produccion", "mixup": 0.0, "patience": 5},
+    "dog_breed": {"epochs": 30, "warmup_epochs": 3, "aug": "produccion", "mixup": 0.2, "patience": 8},
+    "cat_breed": {"epochs": 30, "warmup_epochs": 3, "aug": "produccion", "mixup": 0.2, "patience": 8},
 }
 LABEL_SMOOTHING = 0.1
 
@@ -90,7 +99,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="LR del backbone en fase 2; 10x menor que la cabeza para no borrar lo preentrenado")
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--dropout", type=float, default=0.3)
-    parser.add_argument("--aug", choices=(AUG_BASE, AUG_STRONG), default=None)
+    parser.add_argument("--aug", choices=(AUG_BASE, AUG_STRONG, AUG_PRODUCCION), default=None)
     parser.add_argument("--mixup", type=float, default=None)
     parser.add_argument("--workers", type=int, default=default_workers())
     parser.add_argument("--no-amp", dest="amp", action="store_false",
@@ -116,15 +125,51 @@ def resolve_args(args: argparse.Namespace) -> argparse.Namespace:
     return args
 
 
+def calibrar_temperatura(val_logits: "np.ndarray", val_labels: list[int]) -> float:
+    """Temperature scaling (Guo et al. 2017): un escalar T que corrige la sobreconfianza.
+
+    Las redes modernas dicen "95% seguro" cuando aciertan el 80%: en produccion eso infla
+    las confianzas que ve el usuario y desajusta el umbral de "raza no identificada".
+    Dividir los logits por T (ajustado en validacion) arregla la calibracion sin cambiar
+    NINGUNA prediccion: softmax(z/T) preserva el argmax.
+    """
+    logits = torch.tensor(val_logits, dtype=torch.float32)
+    labels = torch.tensor(val_labels)
+    log_t = torch.nn.Parameter(torch.zeros(1))  # T = exp(log_t) > 0 siempre
+    opt = torch.optim.LBFGS([log_t], lr=0.1, max_iter=100)
+
+    def closure():
+        opt.zero_grad()
+        loss = nn.functional.cross_entropy(logits / log_t.exp(), labels)
+        loss.backward()
+        return loss
+
+    opt.step(closure)
+    t = float(log_t.detach().exp().clamp(0.1, 10.0))
+    antes = float(nn.functional.cross_entropy(logits, labels))
+    despues = float(nn.functional.cross_entropy(logits / t, labels))
+    print(f"[calibracion] T={t:.3f} | NLL validacion: {antes:.4f} -> {despues:.4f}")
+    return t
+
+
 def main() -> None:
     args = resolve_args(build_arg_parser().parse_args())
     task = args.task
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[{task}/pro] device: {device}, arch: {args.arch}, datos: {args.data_dir}")
 
+    if device.type == "cuda":
+        # TF32 (gratis en Ampere+: A10G, L4, L40S) y autotuning de cuDNN con tamano fijo
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cudnn.benchmark = True
+
     train_loader, val_loader, test_loader, class_names, class_counts = build_dataloaders(
         args.data_dir, args.batch_size, aug=args.aug, img_size=args.img_size,
         workers=args.workers, norm=NORM_IMAGENET,
+        # razas: PetFinder deja clases muy desparejas (3000 vs ~400); el sampler las nivela
+        # por epoca. El detector NO: su desbalance 35/35/30 es de diseno y lo cubre la loss
+        balanced=(task != "detector"),
     )
     print(f"[{task}/pro] clases ({len(class_names)}): {dict(zip(class_names, class_counts))}")
 
@@ -225,14 +270,24 @@ def main() -> None:
         forced_metrics = forced_mode_metrics(test_logits, test_labels, class_names, "ninguno")
         print(f"[{task}/pro] modo forzado: accuracy={forced_metrics['accuracy']:.4f}")
 
-    val_maxprob, val_preds, val_labels = collect_probs(model, val_loader, device)
-    val_correct = [p == t for p, t in zip(val_preds, val_labels)]
+    # calibracion de confianza: T se ajusta en validacion, viaja en el checkpoint y la
+    # inferencia divide los logits por T. El umbral de "raza no identificada" se calcula
+    # sobre las probabilidades YA calibradas, que son las que vera el pipeline en produccion.
+    val_logits, val_labels = collect_logits(model, val_loader, device)
+    temperatura = calibrar_temperatura(val_logits, val_labels)
+    ckpt["temperature"] = temperatura
+    torch.save(ckpt, args.model_out)
+
+    val_probs = softmax(val_logits / temperatura)
+    val_maxprob = val_probs.max(axis=1).tolist()
+    val_correct = (val_probs.argmax(axis=1) == np.asarray(val_labels)).tolist()
     unknown_dir = args.data_dir / "unknown"
     unknown_maxprob = None
     if unknown_dir.exists():
         unknown_ds = ImageFolder(unknown_dir, transform=get_eval_transforms(args.img_size, norm=NORM_IMAGENET))
         unknown_loader = DataLoader(unknown_ds, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
-        unknown_maxprob, _, _ = collect_probs(model, unknown_loader, device)
+        unknown_logits, _ = collect_logits(model, unknown_loader, device)
+        unknown_maxprob = softmax(unknown_logits / temperatura).max(axis=1).tolist()
     open_set = open_set_analysis(val_maxprob, val_correct, unknown_maxprob)
 
     report = {
@@ -259,6 +314,8 @@ def main() -> None:
             "mixup_alpha": args.mixup,
             "early_stopping_paciencia": args.patience,
             "norm": "imagenet",
+            "sampling_balanceado": task != "detector",
+            "temperatura_calibracion": temperatura,
         },
         "distribucion_train": dict(zip(class_names, class_counts)),
         "tiempo_entrenamiento_seg": round(training_time, 1),

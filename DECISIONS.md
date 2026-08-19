@@ -94,6 +94,14 @@ Registro de decisiones tomadas durante el proyecto y pendientes por resolver. Ac
 
 | 2026-08-19 | El pro entrena a **224px** (guardado: detector 224, razas 256) | 224 es la resolución nativa de los preentrenados de torchvision; entrenar más chico desperdicia el backbone. Se guarda con margen para que RandomResizedCrop recorte de verdad (misma lógica que 176→160 de la v1) |
 
+| 2026-08-19 | El pro entrena con **aug "produccion"**: strong + recompresion JPEG aleatoria (calidad 30-90, p=0.30), perspectiva (p=0.25) y escala de grises ocasional (p=0.05) | Las fotos que llegaran por la app vienen recomprimidas por el celular y rara vez de frente; los datasets de entrenamiento no tienen nada de eso. torchvision 0.28 no trae transform de JPEG, asi que `JPEGAleatorio` lo implementa sobre PIL (guardar a BytesIO y releer). Solo PyTorch: el pro no tiene espejo TF |
+
+| 2026-08-19 | Los modelos de raza del pro usan **sampling balanceado** (WeightedRandomSampler) en vez de peso en la loss; el detector NO (su desbalance 35/35/30 es de diseño y lo cubre la weighted loss) | Con PetFinder las clases quedan muy desparejas (tope 3.000 vs razas de ~400). El peso en la loss chocaria con MixUp (que usa cross entropy sin peso, herencia de la paridad TF de la v1); el sampler nivela cuantas veces se VE cada clase por epoca y convive bien con MixUp sin tocar el motor compartido |
+
+| 2026-08-19 | Los checkpoints pro guardan una **temperatura de calibracion** (temperature scaling, Guo et al. 2017) ajustada en validacion; la inferencia divide los logits por T antes del softmax | Las redes modernas son sobreconfiadas: dicen "95%" cuando aciertan 80%. En produccion eso infla las confianzas que ve el usuario y desajusta el umbral de "raza no identificada", que se calcula sobre probabilidades. T no cambia ninguna prediccion (softmax(z/T) preserva el argmax); solo hace honesta la confianza. El umbral de desconocidas del pro se calibra sobre las probabilidades YA templadas, las mismas que vera el pipeline |
+
+| 2026-08-19 | En GPU, el pro activa **TF32 y cudnn.benchmark** ademas del AMP por defecto | TF32 es aceleracion gratis en Ampere o posterior (A10G, L4, L40S: las GPUs candidatas de la EC2 nueva) sin perdida practica de precision para CNNs; cudnn.benchmark autotunea los kernels porque el tamano de entrada es fijo. `run_pro.sh` expone `BATCH` (subir a 128 en GPUs de 24 GB) |
+
 ## Pendientes por decidir
 
 - [x] ~~Tipo de instancia EC2 definitivo~~ — decidido 2026-07-23: **g4dn.xlarge on-demand** (~$0.53/h). El pipeline completo (~4-6h) cuesta ~$3 de los $200 de crédito; una CPU grande saldría más cara y tardaría días. Disco: 60-80GB gp3. Correr en tmux, hacer STOP (no terminate) al terminar

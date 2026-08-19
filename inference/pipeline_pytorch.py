@@ -36,6 +36,7 @@ class LoadedModel:
     img_size: int
     unknown_threshold: float
     norm: str = NORM_SIMPLE  # "imagenet" en los checkpoints pro
+    temperature: float = 1.0  # calibracion de confianza (solo checkpoints pro); 1.0 = sin efecto
 
 
 @dataclass
@@ -110,7 +111,10 @@ def load_model(task: str, device: torch.device, pro: bool = False) -> LoadedMode
         ).to(device)
     model.load_state_dict(ckpt["state_dict"])
     model.eval()
-    return LoadedModel(model, class_names, img_size, _read_threshold(task, pro), ckpt.get("norm", NORM_SIMPLE))
+    return LoadedModel(
+        model, class_names, img_size, _read_threshold(task, pro),
+        ckpt.get("norm", NORM_SIMPLE), float(ckpt.get("temperature", 1.0)),
+    )
 
 
 class PetPipeline:
@@ -145,7 +149,8 @@ class PetPipeline:
         if self.tta:
             # [original, espejo] en un solo batch: una pasada, dos vistas
             tensor = torch.cat([tensor, torch.flip(tensor, dims=[3])], dim=0)
-        return torch.softmax(loaded.model(tensor), dim=1).mean(dim=0)
+        # la temperatura calibra la confianza sin cambiar el argmax (T=1.0 fuera del modo pro)
+        return torch.softmax(loaded.model(tensor) / loaded.temperature, dim=1).mean(dim=0)
 
     def predict(self, image: Image.Image, top_k: int = 3) -> Prediction:
         image = image.convert("RGB")
