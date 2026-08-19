@@ -26,6 +26,8 @@ export interface Prediccion {
 export interface Estado {
   ok: boolean;
   modo: string;
+  /** que pipelines cargo el servidor: 'pytorch', 'tensorflow' y/o 'pro' */
+  frameworks?: string[];
   error: string | null;
 }
 
@@ -56,8 +58,12 @@ export async function verificarEstado(): Promise<Estado> {
   return res.json();
 }
 
-/** Modo de clasificacion: un framework puntual, o los dos para compararlos. */
-export type Modo = 'pytorch' | 'tensorflow' | 'comparar';
+/**
+ * Modo de clasificacion.
+ * - 'pytorch' | 'tensorflow' | 'comparar': los modelos de la presentacion (v1, desde cero)
+ * - 'pro': los modelos con transfer learning (mas razas, confianza calibrada)
+ */
+export type Modo = 'pytorch' | 'tensorflow' | 'comparar' | 'pro';
 
 /**
  * Clasifica la foto y devuelve un resultado POR FRAMEWORK.

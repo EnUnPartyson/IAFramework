@@ -18,7 +18,11 @@ const EMOJI: Record<string, string> = { perro: '🐶', gato: '🐱', ninguno: '�
 const Home: React.FC = () => {
   const [foto, setFoto] = useState<string | null>(null);
   const [resultados, setResultados] = useState<Record<string, Prediccion> | null>(null);
-  const [modo, setModo] = useState<Modo>('pytorch');
+  // vista: 'demo' = los modelos de la presentacion (v1, con comparacion de frameworks);
+  // 'pro' = los modelos con transfer learning
+  const [vista, setVista] = useState<'demo' | 'pro'>('demo');
+  const [modoDemo, setModoDemo] = useState<Exclude<Modo, 'pro'>>('pytorch');
+  const [proDisponible, setProDisponible] = useState<boolean | null>(null);
   const [cargando, setCargando] = useState(false);
   const [conectado, setConectado] = useState<boolean | null>(null);
   const [urlApi, setUrlApi] = useState('');
@@ -35,6 +39,7 @@ const Home: React.FC = () => {
     try {
       const estado = await verificarEstado();
       setConectado(estado.ok);
+      setProDisponible(estado.frameworks ? estado.frameworks.includes('pro') : null);
       if (estado.modo === 'demo') {
         mostrarToast({ message: 'Servidor en modo demo: resultados simulados', duration: 3000, color: 'warning' });
       }
@@ -57,6 +62,7 @@ const Home: React.FC = () => {
       setResultados(null);
       setCargando(true);
       try {
+        const modo: Modo = vista === 'pro' ? 'pro' : modoDemo;
         setResultados(await clasificar(imagen.base64String, modo));
         setConectado(true);
       } catch (error) {
@@ -102,14 +108,41 @@ const Home: React.FC = () => {
         )}
 
         <IonSegment
-          value={modo}
-          onIonChange={(e) => { setModo(e.detail.value as Modo); setResultados(null); }}
+          value={vista}
+          onIonChange={(e) => { setVista(e.detail.value as 'demo' | 'pro'); setResultados(null); }}
           className="selector-modo"
         >
-          <IonSegmentButton value="pytorch"><IonLabel>PyTorch</IonLabel></IonSegmentButton>
-          <IonSegmentButton value="tensorflow"><IonLabel>TensorFlow</IonLabel></IonSegmentButton>
-          <IonSegmentButton value="comparar"><IonLabel>Comparar</IonLabel></IonSegmentButton>
+          <IonSegmentButton value="demo"><IonLabel>Demo</IonLabel></IonSegmentButton>
+          <IonSegmentButton value="pro"><IonLabel>Pro</IonLabel></IonSegmentButton>
         </IonSegment>
+
+        {vista === 'demo' ? (
+          <IonSegment
+            value={modoDemo}
+            onIonChange={(e) => { setModoDemo(e.detail.value as Exclude<Modo, 'pro'>); setResultados(null); }}
+            className="selector-framework"
+          >
+            <IonSegmentButton value="pytorch"><IonLabel>PyTorch</IonLabel></IonSegmentButton>
+            <IonSegmentButton value="tensorflow"><IonLabel>TensorFlow</IonLabel></IonSegmentButton>
+            <IonSegmentButton value="comparar"><IonLabel>Comparar</IonLabel></IonSegmentButton>
+          </IonSegment>
+        ) : (
+          <>
+            <IonNote className="nota-pro">
+              Transfer learning: mas razas, confianza calibrada y entrenamiento pensado para
+              fotos reales de camara.
+            </IonNote>
+            {proDisponible === false && (
+              <IonCard color="warning">
+                <IonCardContent>
+                  El servidor todavia no tiene los modelos pro cargados (faltan los
+                  <code> models/*_pro_pytorch.pt</code>, se bajan de la EC2 cuando termine el
+                  entrenamiento). Mientras tanto las fotos en este modo van a fallar.
+                </IonCardContent>
+              </IonCard>
+            )}
+          </>
+        )}
 
         <div className="botones-captura">
           <IonButton expand="block" size="large" onClick={() => tomarFoto(CameraSource.Camera)}>
@@ -139,8 +172,13 @@ const Home: React.FC = () => {
         {resultados && !cargando && Object.entries(resultados).map(([framework, resultado]) => (
           <IonCard key={framework}>
             <IonCardHeader>
-              {Object.keys(resultados).length > 1 && (
-                <IonBadge color="medium" className="badge-framework">{framework}</IonBadge>
+              {(framework === 'pro' || Object.keys(resultados).length > 1) && (
+                <IonBadge
+                  color={framework === 'pro' ? 'tertiary' : 'medium'}
+                  className="badge-framework"
+                >
+                  {framework === 'pro' ? 'PRO' : framework}
+                </IonBadge>
               )}
               <IonCardTitle>
                 {EMOJI[resultado.especie] ?? '?'} {resultado.resumen}

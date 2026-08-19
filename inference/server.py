@@ -71,8 +71,9 @@ def inicio() -> str:
     """Pagina de estado: es lo que ve quien abre la URL base en el navegador."""
     if _state["demo"]:
         estado, color = "Modo demo (respuestas simuladas)", "#A9700F"
-    elif _state["pipeline"] is not None:
-        estado, color = "Modelos cargados y listos", "#2E7D53"
+    elif _state["pipelines"]:
+        cargados = ", ".join(sorted(_state["pipelines"]))
+        estado, color = f"Modelos cargados y listos ({cargados})", "#2E7D53"
     else:
         estado, color = f"Sin modelos: {_state['error'] or 'error desconocido'}", "#B03A2E"
 
@@ -162,7 +163,10 @@ async def predict_comparar(file: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=503, detail=_state["error"] or "modelos no cargados")
 
     image = _abrir(raw)
-    return {"frameworks": {fw: p.predict(image).to_dict() for fw, p in _state["pipelines"].items()}}
+    v1 = {fw: p for fw, p in _state["pipelines"].items() if fw in ("pytorch", "tensorflow")}
+    if not v1:
+        raise HTTPException(status_code=503, detail="no hay modelos v1 cargados para comparar")
+    return {"frameworks": {fw: p.predict(image).to_dict() for fw, p in v1.items()}}
 
 
 def _abrir(raw: bytes) -> Image.Image:
@@ -201,6 +205,10 @@ def main() -> None:
         help="que modelos cargar. 'ambos' habilita /predict/comparar y requiere torch y "
         "tensorflow en el mismo venv (para inferencia en CPU conviven sin problema)",
     )
+    parser.add_argument(
+        "--sin-pro", dest="sin_pro", action="store_true",
+        help="no intentar cargar los modelos pro (por defecto se cargan si existen en models/)",
+    )
     args = parser.parse_args()
 
     _state["demo"] = args.demo
@@ -209,11 +217,17 @@ def main() -> None:
     else:
         errores = []
         pedidos = ("pytorch", "tensorflow") if args.frameworks == "ambos" else (args.frameworks,)
+        if not args.sin_pro:
+            # el modo pro (transfer learning) se suma si sus pesos existen; si todavia no se
+            # entrenaron, se avisa y la app simplemente no lo ofrece
+            pedidos = pedidos + ("pro",)
 
         for fw in pedidos:
             try:
                 if fw == "pytorch":
                     _state["pipelines"][fw] = PetPipeline(forced=args.forced, tta=not args.sin_tta)
+                elif fw == "pro":
+                    _state["pipelines"][fw] = PetPipeline(forced=args.forced, tta=not args.sin_tta, pro=True)
                 else:
                     # se importa aca y no arriba: si solo se pide PyTorch, no hace falta
                     # tener tensorflow instalado
