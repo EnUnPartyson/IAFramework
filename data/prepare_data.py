@@ -16,6 +16,10 @@ PROCESSED_ROOT = Path(__file__).resolve().parent.parent / "data" / "processed"
 METRICS_DIR = Path(__file__).resolve().parent.parent / "metrics"
 
 IMG_SIZE = 128  # detector: entrena y evalua a 128
+# ...pero se guarda a 160, igual que las razas: RandomResizedCrop(scale=0.5-1.0) recorta del
+# archivo, y si el archivo ya esta a 128 cada recorte se re-amplia y pierde detalle. El costo
+# es solo disco -- el entrenamiento sigue a 128.
+DETECTOR_STORED_SIZE = 160
 # razas: se entrena a 160 (fine-grained necesita mas detalle); se guarda a 176 para que
 # RandomResizedCrop tenga margen real de recorte sin re-ampliar
 BREED_STORED_SIZE = 176
@@ -37,6 +41,18 @@ CAT_BREEDS_TOP_N = 12
 # Razas fuera del top-N: se guarda una muestra como "desconocidas" para evaluar el
 # modo "raza no identificada" (umbral de confianza) contra razas nunca vistas.
 UNKNOWN_SAMPLE_SIZE = 300
+
+# Refuerzo del detector con imagenes de los datasets de raza. La clase "perro" sale de
+# Cats&Dogs, que es mayormente perros medianos y grandes; los chicos y peludos se confunden
+# con gatos (medido: 37% de los errores del detector son perro<->gato). Estas fuentes ya
+# estan descargadas, asi que el refuerzo no cuesta ninguna descarga extra.
+DETECTOR_BREED_BOOST = 6000
+# razas cuyo tamano o pelaje las acerca visualmente a un gato
+RAZAS_PEQUENAS = frozenset({
+    "teddy", "toy_poodle", "bichon_frise", "pomeranian", "chihuahua", "yorkshire_terrier",
+    "papillon", "miniature_pinscher", "shiba_dog", "french_bulldog", "pug",
+    "miniature_schnauzer", "maltese_dog", "shih-tzu", "japanese_spaniel", "pekinese",
+})
 
 
 def _progress(done: int, total: int, label: str, every: int = 2000) -> None:
@@ -191,13 +207,44 @@ def _materialize_splits(
     return distribution
 
 
+def _collect_breed_reinforcement(rng: random.Random) -> tuple[list[Path], list[Path]]:
+    """Imagenes de los datasets de raza para reforzar las clases perro/gato del detector.
+
+    Prioriza razas pequenas, que son las que el detector confunde con gatos. Devuelve
+    (perros, gatos); si las fuentes no estan descargadas devuelve listas vacias y el
+    detector se arma igual, solo que sin el refuerzo.
+    """
+    razas: dict[str, list[Path]] = {}
+    _add_imagenet_style_dirs(razas, RAW_DIR / "stanford_dogs" / "Images")
+    _add_imagenet_style_dirs(razas, RAW_DIR / "tsinghua_dogs")
+    for nombre, rutas in _oxford_breeds(want_cats=False).items():
+        razas.setdefault(nombre, []).extend(rutas)
+
+    pequenas = [p for n, rutas in razas.items() if n in RAZAS_PEQUENAS for p in rutas]
+    resto = [p for n, rutas in razas.items() if n not in RAZAS_PEQUENAS for p in rutas]
+    rng.shuffle(pequenas)
+    rng.shuffle(resto)
+
+    # dos tercios de razas pequenas: son las problematicas, pero conviene que el refuerzo
+    # tambien traiga perros grandes para no sesgar la clase hacia lo chico
+    n_peq = min(len(pequenas), int(DETECTOR_BREED_BOOST * 2 / 3))
+    perros = pequenas[:n_peq] + resto[: DETECTOR_BREED_BOOST - n_peq]
+
+    gatos = [p for rutas in _oxford_breeds(want_cats=True).values() for p in rutas]
+    rng.shuffle(gatos)
+
+    print(f"  Refuerzo de razas: {len(perros)} perros ({n_peq} de razas pequenas), {len(gatos)} gatos")
+    return perros, gatos
+
+
 def prepare_detector_data() -> dict[str, dict[str, int]]:
     rng = random.Random(SEED)
 
     cats, dogs = _collect_cats_dogs()
     coco_dogs, coco_cats = _collect_coco_pet_in_context(rng)
-    dogs = dogs + coco_dogs
-    cats = cats + coco_cats
+    boost_dogs, boost_cats = _collect_breed_reinforcement(rng)
+    dogs = dogs + coco_dogs + boost_dogs
+    cats = cats + coco_cats + boost_cats
 
     # ancla = tamano disponible de perro/gato; "ninguno" se deriva de PROPORTIONS para no hardcodear 35/35/30
     anchor = min(len(cats), len(dogs))
@@ -213,7 +260,7 @@ def prepare_detector_data() -> dict[str, dict[str, int]]:
         "perro": list(dogs[:anchor]),
         "ninguno": none_candidates,
     }
-    return _materialize_splits(class_paths, PROCESSED_ROOT / "detector")
+    return _materialize_splits(class_paths, PROCESSED_ROOT / "detector", size=DETECTOR_STORED_SIZE)
 
 
 def _oxford_breeds(want_cats: bool) -> dict[str, list[Path]]:

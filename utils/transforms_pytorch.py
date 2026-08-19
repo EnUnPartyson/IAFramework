@@ -27,8 +27,19 @@ def get_train_transforms(img_size: int = IMG_SIZE, aug: str = AUG_BASE) -> trans
     else:
         steps += [
             transforms.RandomRotation(15),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+            # jitter de luz mas ancho que el original (0.2): en produccion la camara varia
+            # mucho mas de lo que varia un dataset curado
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.25),
         ]
+    # Domain shift: los modelos se entrenan con fotos de dataset (nitidas, bien enfocadas) pero
+    # en produccion ven una webcam, con desenfoque de movimiento y foco pobre. Sin esto la
+    # accuracy medida en test no se traslada a la camara. Se aplica en los dos modos de aug
+    # porque los 3 modelos terminan en el mismo pipeline de camara.
+    steps += [
+        transforms.RandomApply([transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 1.6))], p=0.30),
+        transforms.RandomAdjustSharpness(sharpness_factor=0.4, p=0.15),
+    ]
+
     steps += [
         transforms.ToTensor(),
         transforms.Normalize(NORM_MEAN, NORM_STD),

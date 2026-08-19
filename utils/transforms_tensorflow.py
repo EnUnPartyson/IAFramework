@@ -20,6 +20,22 @@ AUG_BASE = "base"
 AUG_STRONG = "strong"
 
 
+def _capa_opcional(nombre: str, **kwargs):
+    """Instancia una capa de augmentation si la version de Keras instalada la tiene.
+
+    RandomGaussianBlur / RandomSharpness / RandomSaturation son relativamente nuevas. Si el
+    entorno trae un Keras mas viejo se avisa y se sigue sin esa capa, en vez de romper los 3
+    entrenamientos de TensorFlow. El aviso queda en el log para saber que la paridad con
+    PyTorch quedo incompleta en esa corrida.
+    """
+    capa = getattr(layers, nombre, None)
+    if capa is None:
+        print(f"  AVISO: keras {tf.keras.__version__} no tiene layers.{nombre}; "
+              f"se omite (paridad incompleta con PyTorch)")
+        return None
+    return capa(**kwargs)
+
+
 def build_augmentation(aug: str = AUG_BASE) -> tf.keras.Sequential:
     if aug not in (AUG_BASE, AUG_STRONG):
         raise ValueError(f"aug debe ser '{AUG_BASE}' o '{AUG_STRONG}', no {aug!r}")
@@ -39,10 +55,27 @@ def build_augmentation(aug: str = AUG_BASE) -> tf.keras.Sequential:
     else:
         steps += [
             layers.RandomRotation(15 / 360),
-            layers.RandomBrightness(0.2, value_range=(0.0, 255.0)),
-            layers.RandomContrast(0.2),
+            # espejo de ColorJitter(brightness=0.3, contrast=0.3, saturation=0.25).
+            # RandomSaturation usa 0.5 como no-op (no 0 como torchvision), asi que un
+            # jitter de +-0.25 alrededor del original es factor=(0.25, 0.75).
+            layers.RandomBrightness(0.3, value_range=(0.0, 255.0)),
+            layers.RandomContrast(0.3),
+            _capa_opcional("RandomSaturation", factor=(0.25, 0.75), value_range=(0.0, 255.0)),
         ]
-    return tf.keras.Sequential(steps)
+    # Domain shift: espejo del bloque de camara de transforms_pytorch (ver comentario ahi).
+    # RandomGaussianBlur.factor ES la probabilidad de aplicar el desenfoque, no su intensidad
+    # (la intensidad es sigma), asi que factor=(0.30, 0.30) equivale a RandomApply(p=0.30).
+    # RandomSharpness no tiene parametro de probabilidad y usa 0.5 como no-op: el rango
+    # (0.2, 0.5) aproxima "a veces desenfoca un poco, a veces no toca nada", que es lo que
+    # hace RandomAdjustSharpness(0.4, p=0.15) en torchvision. No es identico y se acepta.
+    steps += [
+        _capa_opcional(
+            "RandomGaussianBlur",
+            factor=(0.30, 0.30), kernel_size=5, sigma=(0.1, 1.6), value_range=(0.0, 255.0),
+        ),
+        _capa_opcional("RandomSharpness", factor=(0.2, 0.5), value_range=(0.0, 255.0)),
+    ]
+    return tf.keras.Sequential([c for c in steps if c is not None])
 
 
 def count_train_images_per_class(data_dir: Path) -> tuple[list[str], list[int]]:

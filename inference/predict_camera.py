@@ -126,9 +126,13 @@ def main() -> None:
     parser.add_argument("--camara", type=int, default=0, help="indice de la camara (default 0)")
     parser.add_argument("--cada", type=int, default=5, help="clasificar 1 de cada N frames")
     parser.add_argument("--forced", action="store_true", help="modo forzado: ignora la clase 'ninguno'")
+    parser.add_argument(
+        "--sin-tta", dest="sin_tta", action="store_true",
+        help="desactiva el test-time augmentation (1 forward en vez de 2, prediccion mas ruidosa)",
+    )
     args = parser.parse_args()
 
-    pipeline = PetPipeline(forced=args.forced)
+    pipeline = PetPipeline(forced=args.forced, tta=not args.sin_tta)
     print(f"Modelos cargados en {pipeline.device}")
 
     if args.imagen:

@@ -61,8 +61,10 @@ def load_model(task: str) -> LoadedModelTF:
 class PetPipelineTF:
     """Carga los 3 modelos de Keras una sola vez y clasifica imagenes."""
 
-    def __init__(self, forced: bool = False) -> None:
+    def __init__(self, forced: bool = False, tta: bool = True) -> None:
         self.forced = forced
+        # TTA con espejo horizontal, espejo exacto de PetPipeline (PyTorch): ver el comentario ahi
+        self.tta = tta
         self.detector = load_model("detector")
         self.breed_models: dict[str, LoadedModelTF] = {}
         for especie, task in (("perro", "dog_breed"), ("gato", "cat_breed")):
@@ -74,9 +76,14 @@ class PetPipelineTF:
     def _probs(self, loaded: LoadedModelTF, image: Image.Image) -> np.ndarray:
         # el modelo espera [0,255]: la normalizacion vive en su capa Rescaling
         arr = np.asarray(image.resize((loaded.img_size, loaded.img_size)), dtype="float32")
-        logits = loaded.model.predict(arr[None, ...], verbose=0)[0]
-        exp = np.exp(logits - logits.max())
-        return exp / exp.sum()
+        batch = arr[None, ...]
+        if self.tta:
+            # [original, espejo] en un solo batch; axis=2 es el ancho en (N, alto, ancho, canales)
+            batch = np.concatenate([batch, batch[:, :, ::-1, :]], axis=0)
+        logits = loaded.model.predict(batch, verbose=0)
+        exp = np.exp(logits - logits.max(axis=1, keepdims=True))
+        probs = exp / exp.sum(axis=1, keepdims=True)
+        return probs.mean(axis=0)
 
     def predict(self, image: Image.Image, top_k: int = 3) -> Prediction:
         image = image.convert("RGB")
@@ -106,6 +113,7 @@ class PetPipelineTF:
         info = {
             "framework": "tensorflow",
             "modo_forzado": self.forced,
+            "tta": self.tta,
             "detector": {"clases": self.detector.class_names, "img_size": self.detector.img_size},
         }
         for especie, loaded in self.breed_models.items():

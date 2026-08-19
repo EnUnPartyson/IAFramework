@@ -106,10 +106,15 @@ def load_model(task: str, device: torch.device) -> LoadedModel:
 class PetPipeline:
     """Carga los 3 modelos una sola vez y clasifica imagenes."""
 
-    def __init__(self, device: str | None = None, forced: bool = False) -> None:
+    def __init__(self, device: str | None = None, forced: bool = False, tta: bool = True) -> None:
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         # modo forzado: ignora la clase "ninguno" y responde siempre perro o gato
         self.forced = forced
+        # TTA: promedia la prediccion de la imagen y su espejo horizontal. Perros y gatos son
+        # simetricos, asi que el espejo es una vista valida de la misma mascota; promediar dos
+        # vistas baja la varianza de la prediccion. Cuesta el doble de forward pass (irrelevante
+        # en modelos de este tamano) y no requiere reentrenar nada.
+        self.tta = tta
         self.detector = load_model("detector", self.device)
         # los modelos de raza son opcionales: sin ellos el pipeline igual detecta la especie
         self.breed_models: dict[str, LoadedModel] = {}
@@ -122,7 +127,10 @@ class PetPipeline:
     @torch.no_grad()
     def _probs(self, loaded: LoadedModel, image: Image.Image) -> torch.Tensor:
         tensor = get_eval_transforms(img_size=loaded.img_size)(image).unsqueeze(0).to(self.device)
-        return torch.softmax(loaded.model(tensor), dim=1)[0]
+        if self.tta:
+            # [original, espejo] en un solo batch: una pasada, dos vistas
+            tensor = torch.cat([tensor, torch.flip(tensor, dims=[3])], dim=0)
+        return torch.softmax(loaded.model(tensor), dim=1).mean(dim=0)
 
     def predict(self, image: Image.Image, top_k: int = 3) -> Prediction:
         image = image.convert("RGB")
@@ -153,6 +161,7 @@ class PetPipeline:
         info = {
             "device": str(self.device),
             "modo_forzado": self.forced,
+            "tta": self.tta,
             "detector": {"clases": self.detector.class_names, "img_size": self.detector.img_size},
         }
         for especie, loaded in self.breed_models.items():

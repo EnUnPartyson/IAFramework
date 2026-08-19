@@ -191,6 +191,10 @@ def main() -> None:
     parser.add_argument("--demo", action="store_true", help="respuestas simuladas, sin cargar pesos")
     parser.add_argument("--forced", action="store_true", help="modo forzado: ignora la clase 'ninguno'")
     parser.add_argument(
+        "--sin-tta", dest="sin_tta", action="store_true",
+        help="desactiva el test-time augmentation (1 forward en vez de 2, prediccion mas ruidosa)",
+    )
+    parser.add_argument(
         "--frameworks",
         choices=("pytorch", "tensorflow", "ambos"),
         default="pytorch",
@@ -209,13 +213,13 @@ def main() -> None:
         for fw in pedidos:
             try:
                 if fw == "pytorch":
-                    _state["pipelines"][fw] = PetPipeline(forced=args.forced)
+                    _state["pipelines"][fw] = PetPipeline(forced=args.forced, tta=not args.sin_tta)
                 else:
                     # se importa aca y no arriba: si solo se pide PyTorch, no hace falta
                     # tener tensorflow instalado
                     from inference.pipeline_tensorflow import PetPipelineTF
 
-                    _state["pipelines"][fw] = PetPipelineTF(forced=args.forced)
+                    _state["pipelines"][fw] = PetPipelineTF(forced=args.forced, tta=not args.sin_tta)
                 print(f"  [{fw}] modelos cargados")
             except (FileNotFoundError, ImportError) as exc:
                 errores.append(f"{fw}: {exc}")
