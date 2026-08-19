@@ -25,55 +25,64 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT_DIR))
 from utils.model_defs_pytorch import SimpleCNN  # noqa: E402
 from utils.report_common import metrics_from_predictions, top_confusions  # noqa: E402
-from utils.transforms_pytorch import NORM_MEAN, NORM_STD  # noqa: E402
+from utils.transforms_pytorch import NORM_SIMPLE, _norm_stats  # noqa: E402
 
 PROCESSED_ROOT = ROOT_DIR / "data" / "processed"
 MODELS_DIR = ROOT_DIR / "models"
 METRICS_DIR = ROOT_DIR / "metrics"
 
 
-def transform_limpia(img_size: int) -> transforms.Compose:
+def transform_limpia(img_size: int, norm: str = NORM_SIMPLE) -> transforms.Compose:
     """Lo mismo que ve el modelo en el test normal."""
+    mean, std = _norm_stats(norm)
     return transforms.Compose([
         transforms.Resize((img_size, img_size)),
         transforms.ToTensor(),
-        transforms.Normalize(NORM_MEAN, NORM_STD),
+        transforms.Normalize(mean, std),
     ])
 
 
-def transform_camara(img_size: int) -> transforms.Compose:
+def transform_camara(img_size: int, norm: str = NORM_SIMPLE) -> transforms.Compose:
     """Simula una webcam: desenfoque de foco, luz distinta y perdida de nitidez.
 
     Los parametros son aleatorios, pero se fija la semilla antes de cada evaluacion para que
     las corridas con y sin TTA vean exactamente la misma degradacion y la comparacion sea justa.
     """
+    mean, std = _norm_stats(norm)
     return transforms.Compose([
         transforms.Resize((img_size, img_size)),
         transforms.GaussianBlur(kernel_size=5, sigma=(0.8, 1.6)),
         transforms.ColorJitter(brightness=0.35, contrast=0.35, saturation=0.3),
         transforms.RandomAdjustSharpness(sharpness_factor=0.5, p=0.5),
         transforms.ToTensor(),
-        transforms.Normalize(NORM_MEAN, NORM_STD),
+        transforms.Normalize(mean, std),
     ])
 
 
-def cargar_modelo(task: str, device: torch.device) -> tuple[SimpleCNN, list[str], int]:
-    path = MODELS_DIR / f"{task}_pytorch.pt"
+def cargar_modelo(task: str, device: torch.device, pro: bool = False) -> tuple[torch.nn.Module, list[str], int, str]:
+    path = MODELS_DIR / (f"{task}_pro_pytorch.pt" if pro else f"{task}_pytorch.pt")
     if not path.exists():
         raise FileNotFoundError(f"Falta {path}")
     ckpt = torch.load(path, map_location=device, weights_only=False)
     class_names = list(ckpt["class_names"])
     img_size = int(ckpt.get("img_size", 128))
-    model = SimpleCNN(
-        num_classes=len(class_names),
-        dropout=float(ckpt.get("dropout", 0.4)),
-        head=ckpt.get("head", "flatten"),
-        blocks=int(ckpt.get("blocks", 4)),
-        img_size=img_size,
-    ).to(device)
+    if "arch" in ckpt:
+        from utils.model_defs_pro_pytorch import build_pretrained
+        model = build_pretrained(
+            ckpt["arch"], num_classes=len(class_names),
+            dropout=float(ckpt.get("dropout", 0.3)), pretrained=False,
+        ).to(device)
+    else:
+        model = SimpleCNN(
+            num_classes=len(class_names),
+            dropout=float(ckpt.get("dropout", 0.4)),
+            head=ckpt.get("head", "flatten"),
+            blocks=int(ckpt.get("blocks", 4)),
+            img_size=img_size,
+        ).to(device)
     model.load_state_dict(ckpt["state_dict"])
     model.eval()
-    return model, class_names, img_size
+    return model, class_names, img_size, ckpt.get("norm", NORM_SIMPLE)
 
 
 @torch.no_grad()
@@ -116,14 +125,16 @@ def main() -> None:
                         help="se puede repetir para evaluar varios modelos")
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--pro", action="store_true",
+                        help="evalua los modelos <task>_pro_pytorch.pt sobre data/processed/<task>_pro")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Dispositivo: {device}\n")
 
     for task in args.task:
-        model, class_names, img_size = cargar_modelo(task, device)
-        test_dir = PROCESSED_ROOT / task / "test"
+        model, class_names, img_size, norm = cargar_modelo(task, device, pro=args.pro)
+        test_dir = PROCESSED_ROOT / (f"{task}_pro" if args.pro else task) / "test"
         if not test_dir.exists():
             print(f"[{task}] falta {test_dir}, se omite")
             continue
@@ -133,7 +144,7 @@ def main() -> None:
             for tta in (False, True):
                 # misma semilla -> la degradacion aleatoria es identica con y sin TTA
                 torch.manual_seed(args.seed)
-                ds = ImageFolder(test_dir, transform=build(img_size))
+                ds = ImageFolder(test_dir, transform=build(img_size, norm))
                 assert ds.classes == class_names, f"clases del disco {ds.classes} != del checkpoint {class_names}"
                 loader = DataLoader(ds, batch_size=args.batch_size, shuffle=False, num_workers=0)
                 y_true, y_pred = evaluar(model, loader, device, tta)
@@ -164,7 +175,7 @@ def main() -> None:
                   f"({pg['pct_de_los_errores']}% de los errores)")
 
         METRICS_DIR.mkdir(exist_ok=True)
-        out = METRICS_DIR / f"{task}_robustez.json"
+        out = METRICS_DIR / (f"{task}_pro_robustez.json" if args.pro else f"{task}_robustez.json")
         with open(out, "w", encoding="utf-8") as f:
             json.dump({"task": task, "clases": class_names, "condiciones": resultados}, f,
                       indent=2, ensure_ascii=False)

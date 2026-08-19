@@ -19,7 +19,7 @@ from PIL import Image
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from utils.model_defs_pytorch import SimpleCNN  # noqa: E402
-from utils.transforms_pytorch import get_eval_transforms  # noqa: E402
+from utils.transforms_pytorch import NORM_SIMPLE, get_eval_transforms  # noqa: E402
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT_DIR / "models"
@@ -31,10 +31,11 @@ DEFAULT_UNKNOWN_THRESHOLD = 0.45
 
 @dataclass
 class LoadedModel:
-    model: SimpleCNN
+    model: "torch.nn.Module"
     class_names: list[str]
     img_size: int
     unknown_threshold: float
+    norm: str = NORM_SIMPLE  # "imagenet" en los checkpoints pro
 
 
 @dataclass
@@ -70,9 +71,9 @@ class Prediction:
         }
 
 
-def _read_threshold(task: str) -> float:
+def _read_threshold(task: str, pro: bool = False) -> float:
     """Umbral de 'raza no identificada' calibrado durante el entrenamiento."""
-    path = METRICS_DIR / f"{task}_pytorch_metrics.json"
+    path = METRICS_DIR / (f"{task}_pro_metrics.json" if pro else f"{task}_pytorch_metrics.json")
     if not path.exists():
         return DEFAULT_UNKNOWN_THRESHOLD
     try:
@@ -82,8 +83,8 @@ def _read_threshold(task: str) -> float:
         return DEFAULT_UNKNOWN_THRESHOLD
 
 
-def load_model(task: str, device: torch.device) -> LoadedModel:
-    path = MODELS_DIR / f"{task}_pytorch.pt"
+def load_model(task: str, device: torch.device, pro: bool = False) -> LoadedModel:
+    path = MODELS_DIR / (f"{task}_pro_pytorch.pt" if pro else f"{task}_pytorch.pt")
     if not path.exists():
         raise FileNotFoundError(
             f"Falta {path}. Bajar los pesos de la EC2 con scp (ver README) antes de correr inferencia."
@@ -91,23 +92,37 @@ def load_model(task: str, device: torch.device) -> LoadedModel:
     ckpt = torch.load(path, map_location=device, weights_only=False)
     class_names = list(ckpt["class_names"])
     img_size = int(ckpt.get("img_size", 128))
-    model = SimpleCNN(
-        num_classes=len(class_names),
-        dropout=float(ckpt.get("dropout", 0.4)),
-        head=ckpt.get("head", "flatten"),
-        blocks=int(ckpt.get("blocks", 4)),
-        img_size=img_size,
-    ).to(device)
+    if "arch" in ckpt:
+        # checkpoint pro: backbone preentrenado; el esqueleto se arma sin bajar pesos de
+        # ImageNet (pretrained=False) porque el state_dict ya trae todo
+        from utils.model_defs_pro_pytorch import build_pretrained
+        model = build_pretrained(
+            ckpt["arch"], num_classes=len(class_names),
+            dropout=float(ckpt.get("dropout", 0.3)), pretrained=False,
+        ).to(device)
+    else:
+        model = SimpleCNN(
+            num_classes=len(class_names),
+            dropout=float(ckpt.get("dropout", 0.4)),
+            head=ckpt.get("head", "flatten"),
+            blocks=int(ckpt.get("blocks", 4)),
+            img_size=img_size,
+        ).to(device)
     model.load_state_dict(ckpt["state_dict"])
     model.eval()
-    return LoadedModel(model, class_names, img_size, _read_threshold(task))
+    return LoadedModel(model, class_names, img_size, _read_threshold(task, pro), ckpt.get("norm", NORM_SIMPLE))
 
 
 class PetPipeline:
     """Carga los 3 modelos una sola vez y clasifica imagenes."""
 
-    def __init__(self, device: str | None = None, forced: bool = False, tta: bool = True) -> None:
+    def __init__(
+        self, device: str | None = None, forced: bool = False, tta: bool = True, pro: bool = False
+    ) -> None:
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        # pro=True carga los modelos <task>_pro_pytorch.pt (transfer learning); requiere
+        # haberlos entrenado con train/train_pro_pytorch.py
+        self.pro = pro
         # modo forzado: ignora la clase "ninguno" y responde siempre perro o gato
         self.forced = forced
         # TTA: promedia la prediccion de la imagen y su espejo horizontal. Perros y gatos son
@@ -115,18 +130,18 @@ class PetPipeline:
         # vistas baja la varianza de la prediccion. Cuesta el doble de forward pass (irrelevante
         # en modelos de este tamano) y no requiere reentrenar nada.
         self.tta = tta
-        self.detector = load_model("detector", self.device)
+        self.detector = load_model("detector", self.device, pro=pro)
         # los modelos de raza son opcionales: sin ellos el pipeline igual detecta la especie
         self.breed_models: dict[str, LoadedModel] = {}
         for especie, task in (("perro", "dog_breed"), ("gato", "cat_breed")):
             try:
-                self.breed_models[especie] = load_model(task, self.device)
+                self.breed_models[especie] = load_model(task, self.device, pro=pro)
             except FileNotFoundError:
                 print(f"[aviso] falta el modelo de raza de {especie}; solo se detectara la especie")
 
     @torch.no_grad()
     def _probs(self, loaded: LoadedModel, image: Image.Image) -> torch.Tensor:
-        tensor = get_eval_transforms(img_size=loaded.img_size)(image).unsqueeze(0).to(self.device)
+        tensor = get_eval_transforms(img_size=loaded.img_size, norm=loaded.norm)(image).unsqueeze(0).to(self.device)
         if self.tta:
             # [original, espejo] en un solo batch: una pasada, dos vistas
             tensor = torch.cat([tensor, torch.flip(tensor, dims=[3])], dim=0)
@@ -162,6 +177,7 @@ class PetPipeline:
             "device": str(self.device),
             "modo_forzado": self.forced,
             "tta": self.tta,
+            "pro": self.pro,
             "detector": {"clases": self.detector.class_names, "img_size": self.detector.img_size},
         }
         for especie, loaded in self.breed_models.items():

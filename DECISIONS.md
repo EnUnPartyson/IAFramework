@@ -86,6 +86,14 @@ Registro de decisiones tomadas durante el proyecto y pendientes por resolver. Ac
 
 | 2026-08-19 | Se agrega `train/evaluar_robustez.py`, que evalúa el test en 4 condiciones (limpia / cámara simulada × con y sin TTA) | Ninguna métrica del repo medía la accuracy *de inferencia*: `compare_frameworks.py` compara entrenamientos, no el efecto de TTA ni la caída por domain shift. Sin este script las dos mejoras anteriores quedarían como suposiciones. Fija la semilla antes de cada pasada para que las corridas con y sin TTA vean exactamente la misma degradación aleatoria y la comparación sea justa, y reporta aparte la confusión perro↔gato como porcentaje de los errores, que es la métrica que motivó todo el cambio. Solo PyTorch: el objetivo es medir el efecto de las técnicas, no comparar frameworks |
 
+| 2026-08-19 | El estado del entregable queda **congelado en el tag `v1-presentacion`**; la app y la presentación consumen ese punto | Se va a cambiar a una EC2 más potente y reentrenar con técnicas nuevas; sin un punto fijo, cada mejora posterior arriesga el material ya validado de la presentación. El tag incluye los 6 modelos entrenados, todas las métricas, la app Ionic y el TTA. Cualquier cosa posterior es el "modo pro" y no reemplaza nada: los modelos pro se llaman `*_pro_pytorch.pt`, sus métricas `*_pro_metrics.json` y sus splits `data/processed/*_pro/` |
+
+| 2026-08-19 | El **modo pro** levanta la restricción de entrenar desde cero (**transfer learning permitido**) y se queda **solo con PyTorch** | La regla "desde cero, ambos frameworks" era del entregable académico, que ya quedó congelado en el tag. Para el producto, partir de un backbone preentrenado en ImageNet es la mejora de mayor impacto disponible: el modelo ya sabe ver texturas, formas y animales, y solo se adapta a nuestras clases. Se elige PyTorch porque ganó la comparación v1 en los 3 modelos (0.88/0.76/0.61 vs 0.87/0.65/0.36). Implementación: `train/train_pro_pytorch.py`, fine-tuning en dos fases (warmup de cabeza con backbone congelado → todo con LR diferenciado 10x y cosine annealing), label smoothing 0.1, AMP por defecto, normalización ImageNet (`norm="imagenet"` viaja en el checkpoint para que la inferencia use la correcta). Backbone default `convnext_tiny`; también resnet18/50 y efficientnet_v2_s |
+
+| 2026-08-19 | Datasets extra del pro (vía Kaggle, único paso con credenciales): **Cat Breeds Dataset de PetFinder** (~67 etiquetas) y **AFHQ** (perro/gato/salvaje 512px) | Los gatos eran el punto débil de la v1: Oxford aporta ~200 imgs/raza y 12 clases. PetFinder multiplica los datos y permite subir a 25 razas de gato (y 30 de perro). Sus etiquetas de **pelaje** (domestic short hair, tabby, calico…) se excluyen: son las categorías más numerosas del dataset y no son razas. AFHQ aporta calidad 512px, y su clase "salvaje" (zorros, leones…) entra a "ninguno" del detector como negativo difícil: animales con cara de mascota que no son perro ni gato. Tope de 3.000 imgs/raza (`MAX_POR_RAZA`) porque PetFinder es muy desparejo entre razas |
+
+| 2026-08-19 | El pro entrena a **224px** (guardado: detector 224, razas 256) | 224 es la resolución nativa de los preentrenados de torchvision; entrenar más chico desperdicia el backbone. Se guarda con margen para que RandomResizedCrop recorte de verdad (misma lógica que 176→160 de la v1) |
+
 ## Pendientes por decidir
 
 - [x] ~~Tipo de instancia EC2 definitivo~~ — decidido 2026-07-23: **g4dn.xlarge on-demand** (~$0.53/h). El pipeline completo (~4-6h) cuesta ~$3 de los $200 de crédito; una CPU grande saldría más cara y tardaría días. Disco: 60-80GB gp3. Correr en tmux, hacer STOP (no terminate) al terminar
@@ -107,7 +115,7 @@ Registro de decisiones tomadas durante el proyecto y pendientes por resolver. Ac
 
 | Decisión descartada | Razón |
 |---|---|
-| Transfer learning con modelos preentrenados | El profesor pide entrenar desde cero |
+| Transfer learning con modelos preentrenados (en la v1) | El profesor pide entrenar desde cero. Aplica al entregable congelado en `v1-presentacion`; el modo pro posterior sí lo usa (ver decisión 2026-08-19) |
 | Jupyter notebooks como entregable final | El profesor exige scripts .py |
 | Un solo framework para todo | Se pide comparación explícita TF vs PyTorch |
 | Un solo framework por modelo (ej. Modelo 1 solo PyTorch) | Cada modelo debe existir en ambos frameworks, no repartirse un framework distinto por modelo |

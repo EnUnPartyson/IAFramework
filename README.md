@@ -149,6 +149,39 @@ desde el navegador en `http://localhost:8000/docs`.
 
 La app Ionic se corre aparte: ver [`app/README.md`](app/README.md).
 
+## Modo PRO (post-presentación, transfer learning)
+
+El estado del entregable académico está congelado en el tag **`v1-presentacion`** (6 modelos
+desde cero, TF vs PyTorch). Todo lo que sigue es el modo pro: solo PyTorch (el framework con
+mejor desempeño en la v1), backbones preentrenados en ImageNet, más razas (30 perros / 25
+gatos) y datasets extra. Los archivos pro nunca pisan los de la v1 (`*_pro_pytorch.pt`,
+`*_pro_metrics.json`, `data/processed/*_pro/`).
+
+```bash
+# Único paso manual: API key gratuita de Kaggle para los datasets extra
+#   kaggle.com -> Settings -> API -> "Create New Token" -> descarga kaggle.json
+mkdir -p ~/.kaggle && mv kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
+
+# En la EC2 (descarga + preparación + 3 entrenamientos + comparación base vs pro):
+bash run_pro.sh                        # ARCH=resnet50 para otro backbone
+
+# A mano:
+venv-torch/bin/python data/download_dataset_pro.py
+venv-torch/bin/python data/prepare_data_pro.py
+venv-torch/bin/python train/train_pro_pytorch.py --task detector
+venv-torch/bin/python train/train_pro_pytorch.py --task dog_breed
+venv-torch/bin/python train/train_pro_pytorch.py --task cat_breed
+venv-torch/bin/python train/compare_pro.py
+```
+
+Datasets extra: [Cat Breeds Dataset](https://www.kaggle.com/datasets/ma7555/cat-breeds-dataset)
+(~67 etiquetas de PetFinder; los gatos eran el punto débil de la v1) y
+[AFHQ](https://www.kaggle.com/datasets/andrewmvd/animal-faces) (perro/gato/salvaje en 512px;
+"salvaje" entra a la clase "ninguno" del detector como negativo difícil).
+
+Para probar los modelos pro en inferencia: `PetPipeline(pro=True)` o
+`train/evaluar_robustez.py --pro`.
+
 ## Documentación
 
 - `CLAUDE.md` — contexto para Claude Code

@@ -36,7 +36,13 @@ from utils.report_common import (  # noqa: E402
     save_roc_pr_plot,
     save_training_curves_plot,
 )
-from utils.transforms_pytorch import AUG_BASE, AUG_STRONG, get_eval_transforms, get_train_transforms  # noqa: E402
+from utils.transforms_pytorch import (  # noqa: E402
+    AUG_BASE,
+    AUG_STRONG,
+    NORM_SIMPLE,
+    get_eval_transforms,
+    get_train_transforms,
+)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 # paciencia 4 y no 2: con val_accuracy ruidosa (normal en datasets chicos con MixUp), una
@@ -108,13 +114,18 @@ def default_workers() -> int:
 
 
 def build_dataloaders(
-    data_dir: Path, batch_size: int, aug: str = AUG_BASE, img_size: int = 128, workers: int | None = None
+    data_dir: Path,
+    batch_size: int,
+    aug: str = AUG_BASE,
+    img_size: int = 128,
+    workers: int | None = None,
+    norm: str = NORM_SIMPLE,
 ) -> tuple[DataLoader, DataLoader, DataLoader, list[str], list[int]]:
     if workers is None:
         workers = default_workers()
-    train_ds = ImageFolder(data_dir / "train", transform=get_train_transforms(img_size=img_size, aug=aug))
-    val_ds = ImageFolder(data_dir / "val", transform=get_eval_transforms(img_size=img_size))
-    test_ds = ImageFolder(data_dir / "test", transform=get_eval_transforms(img_size=img_size))
+    train_ds = ImageFolder(data_dir / "train", transform=get_train_transforms(img_size=img_size, aug=aug, norm=norm))
+    val_ds = ImageFolder(data_dir / "val", transform=get_eval_transforms(img_size=img_size, norm=norm))
+    test_ds = ImageFolder(data_dir / "test", transform=get_eval_transforms(img_size=img_size, norm=norm))
 
     class_names = list(train_ds.classes)
     class_counts = [0] * len(class_names)
