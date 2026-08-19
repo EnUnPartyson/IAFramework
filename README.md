@@ -109,13 +109,45 @@ venv-tf/bin/python    train/train_cat_breed_tensorflow.py
 venv-torch/bin/python train/compare_frameworks.py
 ```
 
-## Inferencia con cámara (máquina local)
+## Usar los modelos en la máquina local
 
-Requiere webcam, por eso no corre en EC2. Con los pesos ya bajados (paso 5):
+Requiere webcam, por eso no corre en EC2. Los modelos vienen con el repo
+(`git clone` los trae), así que solo hace falta el entorno.
 
-```bash
-python inference/predict_camera.py
+### Preparar el entorno (una sola vez)
+
+Para inferencia alcanza con PyTorch en versión **CPU**: son ~200 MB en vez de 2,5 GB, y
+clasificar un frame lleva milisegundos igual.
+
+```bat
+python -m venv venv-torch
+venv-torch\Scripts\python.exe -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+venv-torch\Scripts\python.exe -m pip install fastapi uvicorn[standard] python-multipart pillow numpy opencv-python
 ```
+
+### Script de cámara con OpenCV
+
+```bat
+venv-torch\Scripts\python.exe inference\predict_camera.py
+```
+
+Teclas: `q` salir · `espacio` congelar · `g` guardar el frame.
+
+### API para la app del celular
+
+```bat
+venv-torch\Scripts\python.exe inference\server.py
+```
+
+Imprime al arrancar la IP a usar desde el celular. Documentación interactiva para probarla
+desde el navegador en `http://localhost:8000/docs`.
+
+> **Rutas según la consola.** Los ejemplos de arriba son para `cmd.exe` (barras invertidas).
+> En **PowerShell** hay que anteponer `.\`: `.env-torch\Scripts\python.exe ...`.
+> En **Git Bash** funcionan las barras normales: `venv-torch/Scripts/python.exe ...`.
+> Los bloques con `venv-torch/bin/python` de más arriba son para la EC2 (Linux).
+
+La app Ionic se corre aparte: ver [`app/README.md`](app/README.md).
 
 ## Documentación
 
