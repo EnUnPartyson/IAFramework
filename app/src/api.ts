@@ -8,7 +8,10 @@
 import { Preferences } from '@capacitor/preferences';
 
 const CLAVE_URL = 'apiBaseUrl';
-const URL_POR_DEFECTO = 'http://192.168.1.100:8000';
+// localhost sirve al correr la app en el navegador de la misma maquina que la API.
+// Desde el celular hay que cambiarla en los ajustes por la IP que imprime el servidor:
+// pasar por la IP de red desde el mismo equipo puede chocar con el firewall de Windows.
+const URL_POR_DEFECTO = 'http://localhost:8000';
 
 export interface Prediccion {
   especie: 'perro' | 'gato' | 'ninguno';

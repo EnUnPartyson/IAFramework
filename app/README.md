@@ -54,11 +54,19 @@ Requiere Android Studio instalado. Para iOS, `npx cap add ios` y Xcode (solo en 
 
 ## 3. Configurar la URL del servidor
 
-En la app, botón de ajustes (arriba a la derecha) → poner la IP que imprimió el servidor,
-por ejemplo `http://192.168.1.100:8000`. Queda guardada en el dispositivo.
+| Dónde corre la app | URL a usar |
+|---|---|
+| Navegador de la misma máquina que la API | `http://localhost:8000` (es el default, no hay que tocar nada) |
+| Celular | La IP que imprime el servidor al arrancar, ej. `http://192.168.1.100:8000` |
 
-El celular y la laptop tienen que estar en la **misma red WiFi**. Si no conecta, suele ser
-el firewall de Windows bloqueando el puerto 8000 — hay que permitirlo para redes privadas.
+Se cambia con el botón de ajustes (arriba a la derecha) y queda guardada en el dispositivo.
+
+**Si desde el navegador local usás la IP de red en vez de `localhost`**, el pedido sale y
+vuelve por la pila de red y el firewall de Windows puede cortarlo, con un error que el
+navegador reporta confusamente como CORS. Usar `localhost` evita todo eso.
+
+Para el celular, el teléfono y la laptop tienen que estar en la **misma red WiFi**, y hay
+que permitir el puerto 8000 en el firewall de Windows para redes privadas.
 
 ## Notas
 
