@@ -50,14 +50,19 @@ Ver ARCHITECTURE.md para el detalle completo.
 ## Dónde se entrena vs dónde se corre inferencia
 
 - **Entrenamiento:** en una instancia EC2 con GPU (AWS). El repo se clona ahí y se corre `bash run_all.sh` (orquestador de punta a punta: venvs + datos + los 6 entrenamientos + comparación). También se puede correr cada paso a mano (ver README.md).
-- **Inferencia con cámara:** en la laptop local (la EC2 no tiene webcam). Los pesos entrenados (`.pt` / `.h5`) se bajan de la EC2 con `scp`, no se suben a GitHub.
+- **Inferencia con cámara:** en la laptop local (la EC2 no tiene webcam). Los pesos entrenados se bajan de la EC2 con `scp` y desde ahí se publican al repo vía Git LFS (ver "Qué NO debe ir a GitHub").
 
 ## Qué NO debe ir a GitHub
 
 - Datasets completos (`data/raw/`, `data/processed/`)
-- Pesos de modelos (`*.pt`, `*.h5`, `*.keras`)
-- Checkpoints de entrenamiento
+- Checkpoints intermedios de entrenamiento y pesos sueltos fuera de `models/`
+- Entornos virtuales y `node_modules/`
 - Todo esto debe estar en `.gitignore`
+
+**Excepción:** los 6 modelos finales de `models/` **sí** se versionan, mediante **Git LFS**
+(ver `.gitattributes`), porque el equipo necesita compartirlos. Quien clone el repo debe
+tener `git-lfs` instalado y correr `git lfs install` una vez. Las métricas de `metrics/`
+van a git normalmente: son texto e imágenes chicas.
 
 ## Convenciones de código
 
