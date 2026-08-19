@@ -36,9 +36,18 @@ DATASETS = {
 
 
 def _credenciales_ok() -> bool:
+    """Acepta los dos formatos de credencial de Kaggle.
+
+    - clasico: kaggle.json con {"username", "key"} (o KAGGLE_USERNAME/KAGGLE_KEY)
+    - nuevo:   access token "KGAT_..." en ~/.kaggle/access_token (o KAGGLE_API_TOKEN),
+               que es lo que la web de Kaggle entrega ahora al crear un token
+    """
     if os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY"):
         return True
-    return (Path.home() / ".kaggle" / "kaggle.json").exists()
+    if os.environ.get("KAGGLE_API_TOKEN"):
+        return True
+    kaggle_dir = Path.home() / ".kaggle"
+    return (kaggle_dir / "kaggle.json").exists() or (kaggle_dir / "access_token").exists()
 
 
 def _tiene_contenido(destino: Path) -> bool:
@@ -71,14 +80,14 @@ def descargar(dataset_id: str, carpeta: str) -> None:
 
 def main() -> None:
     if not _credenciales_ok():
-        print(
-            "ERROR: faltan credenciales de Kaggle.\n"
-            "  1. Cuenta gratuita en https://www.kaggle.com\n"
-            "  2. Settings -> API -> 'Create New Token' (descarga kaggle.json)\n"
-            "  3. mkdir -p ~/.kaggle && mv ~/Descargas/kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json\n"
-            "     (o exportar KAGGLE_USERNAME y KAGGLE_KEY)\n",
-            file=sys.stderr,
-        )
+        mensaje = """ERROR: faltan credenciales de Kaggle.
+  1. Cuenta gratuita en https://www.kaggle.com
+  2. Settings -> API -> 'Create New Token'
+  3. La web entrega un comando listo para pegar, del estilo:
+       mkdir -p ~/.kaggle && echo KGAT_... > ~/.kaggle/access_token && chmod 600 ~/.kaggle/access_token
+     (tambien vale el kaggle.json clasico en ~/.kaggle/, o exportar
+      KAGGLE_API_TOKEN / KAGGLE_USERNAME+KAGGLE_KEY)"""
+        print(mensaje, file=sys.stderr)
         sys.exit(1)
 
     if shutil.which("kaggle") is None:

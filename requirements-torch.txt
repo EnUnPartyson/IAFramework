@@ -15,4 +15,4 @@ uvicorn[standard]
 python-multipart
 
 # CLI para bajar los datasets extra del modo pro (data/download_dataset_pro.py)
-kaggle
+kaggle>=1.7

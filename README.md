@@ -158,9 +158,11 @@ gatos) y datasets extra. Los archivos pro nunca pisan los de la v1 (`*_pro_pytor
 `*_pro_metrics.json`, `data/processed/*_pro/`).
 
 ```bash
-# Único paso manual: API key gratuita de Kaggle para los datasets extra
-#   kaggle.com -> Settings -> API -> "Create New Token" -> descarga kaggle.json
-mkdir -p ~/.kaggle && mv kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
+# Único paso manual: API key gratuita de Kaggle para los datasets extra.
+# kaggle.com -> Settings -> API -> "Create New Token": la web entrega un comando
+# listo para pegar EN LA EC2, del estilo:
+mkdir -p ~/.kaggle && echo KGAT_... > ~/.kaggle/access_token && chmod 600 ~/.kaggle/access_token
+# (el kaggle.json clasico en ~/.kaggle/ tambien sirve)
 
 # En la EC2 (descarga + preparación + 3 entrenamientos + comparación base vs pro):
 bash run_pro.sh                        # ARCH=resnet50 para otro backbone
