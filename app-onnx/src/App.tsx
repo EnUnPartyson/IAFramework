@@ -109,7 +109,7 @@ const App: React.FC = () => {
           const m = modoRef.current;
           const frameworks: Framework[] = m === 'comparar' ? ['pytorch', 'tensorflow'] : [m];
           const preds: Prediccion[] = [];
-          for (const fw of frameworks) preds.push(await pipeline.predecir(video, canvas, fw));
+          for (const fw of frameworks) preds.push(await pipeline.predecir(video, canvas, fw, true));
           // el anti-parpadeo se decide con el primer framework del modo activo
           historial.push(preds[0].especie);
           if (historial.length > 5) historial.shift();
