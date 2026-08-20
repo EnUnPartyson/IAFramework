@@ -1,0 +1,133 @@
+{
+  "task": "dog_breed",
+  "clases": [
+    "beagle",
+    "bichon_frise",
+    "border_collie",
+    "boxer",
+    "cardigan",
+    "chihuahua",
+    "chinese_rural_dog",
+    "chow",
+    "english_setter",
+    "french_bulldog",
+    "golden_retriever",
+    "great_pyrenees",
+    "keeshond",
+    "labrador_retriever",
+    "malamute",
+    "maltese_dog",
+    "miniature_pinscher",
+    "miniature_schnauzer",
+    "newfoundland",
+    "papillon",
+    "pekinese",
+    "pomeranian",
+    "pug",
+    "saint_bernard",
+    "samoyed",
+    "shiba_dog",
+    "siberian_husky",
+    "teddy",
+    "toy_poodle",
+    "yorkshire_terrier"
+  ],
+  "condiciones": {
+    "limpia": {
+      "accuracy": 0.8966543804933371,
+      "f1_macro": 0.9169809941287802,
+      "top_confusiones": [
+        {
+          "real": "toy_poodle",
+          "predicho": "teddy",
+          "cantidad": 126,
+          "porcentaje_de_la_clase": 0.28
+        },
+        {
+          "real": "teddy",
+          "predicho": "toy_poodle",
+          "cantidad": 110,
+          "porcentaje_de_la_clase": 0.2444
+        },
+        {
+          "real": "toy_poodle",
+          "predicho": "bichon_frise",
+          "cantidad": 29,
+          "porcentaje_de_la_clase": 0.0644
+        }
+      ]
+    },
+    "limpia_tta": {
+      "accuracy": 0.8972214346470088,
+      "f1_macro": 0.9183522111918869,
+      "top_confusiones": [
+        {
+          "real": "toy_poodle",
+          "predicho": "teddy",
+          "cantidad": 132,
+          "porcentaje_de_la_clase": 0.2933
+        },
+        {
+          "real": "teddy",
+          "predicho": "toy_poodle",
+          "cantidad": 112,
+          "porcentaje_de_la_clase": 0.2489
+        },
+        {
+          "real": "toy_poodle",
+          "predicho": "bichon_frise",
+          "cantidad": 29,
+          "porcentaje_de_la_clase": 0.0644
+        }
+      ]
+    },
+    "camara": {
+      "accuracy": 0.8806351006521123,
+      "f1_macro": 0.9002975832889594,
+      "top_confusiones": [
+        {
+          "real": "toy_poodle",
+          "predicho": "teddy",
+          "cantidad": 123,
+          "porcentaje_de_la_clase": 0.2733
+        },
+        {
+          "real": "teddy",
+          "predicho": "toy_poodle",
+          "cantidad": 110,
+          "porcentaje_de_la_clase": 0.2444
+        },
+        {
+          "real": "toy_poodle",
+          "predicho": "bichon_frise",
+          "cantidad": 30,
+          "porcentaje_de_la_clase": 0.0667
+        }
+      ]
+    },
+    "camara_tta": {
+      "accuracy": 0.8851715338814857,
+      "f1_macro": 0.9035185417828643,
+      "top_confusiones": [
+        {
+          "real": "toy_poodle",
+          "predicho": "teddy",
+          "cantidad": 116,
+          "porcentaje_de_la_clase": 0.2578
+        },
+        {
+          "real": "teddy",
+          "predicho": "toy_poodle",
+          "cantidad": 105,
+          "porcentaje_de_la_clase": 0.2333
+        },
+        {
+          "real": "toy_poodle",
+          "predicho": "bichon_frise",
+          "cantidad": 30,
+          "porcentaje_de_la_clase": 0.0667
+        }
+      ]
+    }
+  }
+}

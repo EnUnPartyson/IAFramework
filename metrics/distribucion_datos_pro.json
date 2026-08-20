@@ -1,0 +1,304 @@
+{
+  "detector": {
+    "gato": {
+      "train": 14506,
+      "val": 3108,
+      "test": 3110
+    },
+    "perro": {
+      "train": 14506,
+      "val": 3108,
+      "test": 3110
+    },
+    "ninguno": {
+      "train": 12434,
+      "val": 2664,
+      "test": 2665
+    }
+  },
+  "dog_breed": {
+    "golden_retriever": {
+      "train": 2100,
+      "val": 450,
+      "test": 450
+    },
+    "labrador_retriever": {
+      "train": 2100,
+      "val": 450,
+      "test": 450
+    },
+    "cardigan": {
+      "train": 2100,
+      "val": 450,
+      "test": 450
+    },
+    "toy_poodle": {
+      "train": 2100,
+      "val": 450,
+      "test": 450
+    },
+    "bichon_frise": {
+      "train": 2100,
+      "val": 450,
+      "test": 450
+    },
+    "chinese_rural_dog": {
+      "train": 2100,
+      "val": 450,
+      "test": 450
+    },
+    "teddy": {
+      "train": 2100,
+      "val": 450,
+      "test": 450
+    },
+    "border_collie": {
+      "train": 1920,
+      "val": 411,
+      "test": 413
+    },
+    "samoyed": {
+      "train": 1826,
+      "val": 391,
+      "test": 393
+    },
+    "miniature_schnauzer": {
+      "train": 1747,
+      "val": 374,
+      "test": 375
+    },
+    "pomeranian": {
+      "train": 1648,
+      "val": 353,
+      "test": 354
+    },
+    "malamute": {
+      "train": 1051,
+      "val": 225,
+      "test": 226
+    },
+    "siberian_husky": {
+      "train": 946,
+      "val": 202,
+      "test": 204
+    },
+    "french_bulldog": {
+      "train": 896,
+      "val": 192,
+      "test": 192
+    },
+    "pug": {
+      "train": 838,
+      "val": 179,
+      "test": 181
+    },
+    "shiba_dog": {
+      "train": 730,
+      "val": 156,
+      "test": 157
+    },
+    "papillon": {
+      "train": 701,
+      "val": 150,
+      "test": 151
+    },
+    "miniature_pinscher": {
+      "train": 661,
+      "val": 141,
+      "test": 143
+    },
+    "chihuahua": {
+      "train": 540,
+      "val": 115,
+      "test": 117
+    },
+    "yorkshire_terrier": {
+      "train": 492,
+      "val": 105,
+      "test": 107
+    },
+    "beagle": {
+      "train": 469,
+      "val": 100,
+      "test": 102
+    },
+    "great_pyrenees": {
+      "train": 446,
+      "val": 95,
+      "test": 97
+    },
+    "pekinese": {
+      "train": 440,
+      "val": 94,
+      "test": 95
+    },
+    "newfoundland": {
+      "train": 427,
+      "val": 91,
+      "test": 92
+    },
+    "saint_bernard": {
+      "train": 406,
+      "val": 87,
+      "test": 88
+    },
+    "keeshond": {
+      "train": 406,
+      "val": 87,
+      "test": 88
+    },
+    "boxer": {
+      "train": 403,
+      "val": 86,
+      "test": 87
+    },
+    "english_setter": {
+      "train": 394,
+      "val": 84,
+      "test": 86
+    },
+    "chow": {
+      "train": 367,
+      "val": 78,
+      "test": 80
+    },
+    "maltese_dog": {
+      "train": 350,
+      "val": 75,
+      "test": 76
+    },
+    "_desconocidas": {
+      "unknown": 300
+    }
+  },
+  "cat_breed": {
+    "american_shorthair": {
+      "train": 2100,
+      "val": 450,
+      "test": 450
+    },
+    "persian": {
+      "train": 2100,
+      "val": 450,
+      "test": 450
+    },
+    "siamese": {
+      "train": 2100,
+      "val": 450,
+      "test": 450
+    },
+    "ragdoll": {
+      "train": 2008,
+      "val": 430,
+      "test": 431
+    },
+    "bengal": {
+      "train": 1873,
+      "val": 401,
+      "test": 403
+    },
+    "tiger": {
+      "train": 1579,
+      "val": 338,
+      "test": 339
+    },
+    "russian_blue": {
+      "train": 1449,
+      "val": 310,
+      "test": 311
+    },
+    "manx": {
+      "train": 1441,
+      "val": 308,
+      "test": 310
+    },
+    "bombay": {
+      "train": 1424,
+      "val": 305,
+      "test": 306
+    },
+    "snowshoe": {
+      "train": 1137,
+      "val": 243,
+      "test": 245
+    },
+    "maine_coon": {
+      "train": 1132,
+      "val": 242,
+      "test": 244
+    },
+    "himalayan": {
+      "train": 910,
+      "val": 195,
+      "test": 196
+    },
+    "american_bobtail": {
+      "train": 693,
+      "val": 148,
+      "test": 150
+    },
+    "turkish_van": {
+      "train": 570,
+      "val": 122,
+      "test": 123
+    },
+    "british_shorthair": {
+      "train": 536,
+      "val": 115,
+      "test": 116
+    },
+    "turkish_angora": {
+      "train": 525,
+      "val": 112,
+      "test": 113
+    },
+    "norwegian_forest_cat": {
+      "train": 406,
+      "val": 87,
+      "test": 87
+    },
+    "egyptian_mau": {
+      "train": 353,
+      "val": 75,
+      "test": 77
+    },
+    "oriental_short_hair": {
+      "train": 343,
+      "val": 73,
+      "test": 75
+    },
+    "exotic_shorthair": {
+      "train": 329,
+      "val": 70,
+      "test": 72
+    },
+    "abyssinian": {
+      "train": 318,
+      "val": 68,
+      "test": 69
+    },
+    "birman": {
+      "train": 298,
+      "val": 64,
+      "test": 65
+    },
+    "scottish_fold": {
+      "train": 266,
+      "val": 57,
+      "test": 57
+    },
+    "burmese": {
+      "train": 240,
+      "val": 51,
+      "test": 53
+    },
+    "tonkinese": {
+      "train": 182,
+      "val": 39,
+      "test": 39
+    },
+    "_desconocidas": {
+      "unknown": 299
+    }
+  }
+}

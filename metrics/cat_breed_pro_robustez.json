@@ -1,0 +1,128 @@
+{
+  "task": "cat_breed",
+  "clases": [
+    "abyssinian",
+    "american_bobtail",
+    "american_shorthair",
+    "bengal",
+    "birman",
+    "bombay",
+    "british_shorthair",
+    "burmese",
+    "egyptian_mau",
+    "exotic_shorthair",
+    "himalayan",
+    "maine_coon",
+    "manx",
+    "norwegian_forest_cat",
+    "oriental_short_hair",
+    "persian",
+    "ragdoll",
+    "russian_blue",
+    "scottish_fold",
+    "siamese",
+    "snowshoe",
+    "tiger",
+    "tonkinese",
+    "turkish_angora",
+    "turkish_van"
+  ],
+  "condiciones": {
+    "limpia": {
+      "accuracy": 0.6071496845727394,
+      "f1_macro": 0.5092616538398442,
+      "top_confusiones": [
+        {
+          "real": "manx",
+          "predicho": "american_shorthair",
+          "cantidad": 59,
+          "porcentaje_de_la_clase": 0.1903
+        },
+        {
+          "real": "american_shorthair",
+          "predicho": "tiger",
+          "cantidad": 54,
+          "porcentaje_de_la_clase": 0.12
+        },
+        {
+          "real": "tiger",
+          "predicho": "american_shorthair",
+          "cantidad": 49,
+          "porcentaje_de_la_clase": 0.1445
+        }
+      ]
+    },
+    "limpia_tta": {
+      "accuracy": 0.6096348690498948,
+      "f1_macro": 0.5139592924208711,
+      "top_confusiones": [
+        {
+          "real": "manx",
+          "predicho": "american_shorthair",
+          "cantidad": 62,
+          "porcentaje_de_la_clase": 0.2
+        },
+        {
+          "real": "american_shorthair",
+          "predicho": "tiger",
+          "cantidad": 51,
+          "porcentaje_de_la_clase": 0.1133
+        },
+        {
+          "real": "tiger",
+          "predicho": "american_shorthair",
+          "cantidad": 51,
+          "porcentaje_de_la_clase": 0.1504
+        }
+      ]
+    },
+    "camara": {
+      "accuracy": 0.5821066717644809,
+      "f1_macro": 0.4913763203487225,
+      "top_confusiones": [
+        {
+          "real": "american_shorthair",
+          "predicho": "tiger",
+          "cantidad": 56,
+          "porcentaje_de_la_clase": 0.1244
+        },
+        {
+          "real": "american_shorthair",
+          "predicho": "bombay",
+          "cantidad": 50,
+          "porcentaje_de_la_clase": 0.1111
+        },
+        {
+          "real": "manx",
+          "predicho": "american_shorthair",
+          "cantidad": 49,
+          "porcentaje_de_la_clase": 0.1581
+        }
+      ]
+    },
+    "camara_tta": {
+      "accuracy": 0.5842095201682279,
+      "f1_macro": 0.4931519474243619,
+      "top_confusiones": [
+        {
+          "real": "american_shorthair",
+          "predicho": "tiger",
+          "cantidad": 61,
+          "porcentaje_de_la_clase": 0.1356
+        },
+        {
+          "real": "american_shorthair",
+          "predicho": "bombay",
+          "cantidad": 54,
+          "porcentaje_de_la_clase": 0.12
+        },
+        {
+          "real": "manx",
+          "predicho": "american_shorthair",
+          "cantidad": 46,
+          "porcentaje_de_la_clase": 0.1484
+        }
+      ]
+    }
+  }
+}

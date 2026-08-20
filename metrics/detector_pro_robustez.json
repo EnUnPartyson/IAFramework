@@ -1,0 +1,134 @@
+{
+  "task": "detector",
+  "clases": [
+    "gato",
+    "ninguno",
+    "perro"
+  ],
+  "condiciones": {
+    "limpia": {
+      "accuracy": 0.9942599887450759,
+      "f1_macro": 0.9943003225086966,
+      "top_confusiones": [
+        {
+          "real": "perro",
+          "predicho": "gato",
+          "cantidad": 14,
+          "porcentaje_de_la_clase": 0.0045
+        },
+        {
+          "real": "perro",
+          "predicho": "ninguno",
+          "cantidad": 12,
+          "porcentaje_de_la_clase": 0.0039
+        },
+        {
+          "real": "gato",
+          "predicho": "perro",
+          "cantidad": 11,
+          "porcentaje_de_la_clase": 0.0035
+        }
+      ],
+      "perro_vs_gato": {
+        "perro_predicho_gato": 14,
+        "gato_predicho_perro": 11,
+        "confusion_mutua": 25,
+        "errores_totales": 51,
+        "pct_de_los_errores": 49.0
+      }
+    },
+    "limpia_tta": {
+      "accuracy": 0.9942599887450759,
+      "f1_macro": 0.9942831836819942,
+      "top_confusiones": [
+        {
+          "real": "gato",
+          "predicho": "perro",
+          "cantidad": 12,
+          "porcentaje_de_la_clase": 0.0039
+        },
+        {
+          "real": "ninguno",
+          "predicho": "perro",
+          "cantidad": 12,
+          "porcentaje_de_la_clase": 0.0045
+        },
+        {
+          "real": "perro",
+          "predicho": "ninguno",
+          "cantidad": 12,
+          "porcentaje_de_la_clase": 0.0039
+        }
+      ],
+      "perro_vs_gato": {
+        "perro_predicho_gato": 11,
+        "gato_predicho_perro": 12,
+        "confusion_mutua": 23,
+        "errores_totales": 51,
+        "pct_de_los_errores": 45.1
+      }
+    },
+    "camara": {
+      "accuracy": 0.9917839054586381,
+      "f1_macro": 0.9918072849843673,
+      "top_confusiones": [
+        {
+          "real": "perro",
+          "predicho": "ninguno",
+          "cantidad": 24,
+          "porcentaje_de_la_clase": 0.0077
+        },
+        {
+          "real": "perro",
+          "predicho": "gato",
+          "cantidad": 18,
+          "porcentaje_de_la_clase": 0.0058
+        },
+        {
+          "real": "gato",
+          "predicho": "perro",
+          "cantidad": 14,
+          "porcentaje_de_la_clase": 0.0045
+        }
+      ],
+      "perro_vs_gato": {
+        "perro_predicho_gato": 18,
+        "gato_predicho_perro": 14,
+        "confusion_mutua": 32,
+        "errores_totales": 73,
+        "pct_de_los_errores": 43.8
+      }
+    },
+    "camara_tta": {
+      "accuracy": 0.9922341024198087,
+      "f1_macro": 0.9922630802147774,
+      "top_confusiones": [
+        {
+          "real": "perro",
+          "predicho": "ninguno",
+          "cantidad": 20,
+          "porcentaje_de_la_clase": 0.0064
+        },
+        {
+          "real": "perro",
+          "predicho": "gato",
+          "cantidad": 18,
+          "porcentaje_de_la_clase": 0.0058
+        },
+        {
+          "real": "gato",
+          "predicho": "perro",
+          "cantidad": 13,
+          "porcentaje_de_la_clase": 0.0042
+        }
+      ],
+      "perro_vs_gato": {
+        "perro_predicho_gato": 18,
+        "gato_predicho_perro": 13,
+        "confusion_mutua": 31,
+        "errores_totales": 69,
+        "pct_de_los_errores": 44.9
+      }
+    }
+  }
+}
