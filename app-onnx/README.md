@@ -87,6 +87,17 @@ scp -i tu-llave.pem android/app/build/outputs/apk/debug/app-debug.apk \
 ssh -i tu-llave.pem ubuntu@44.201.7.59 "sudo systemctl restart mascotas-api"
 ```
 
+## Comparacion TF vs PyTorch (on-device)
+
+El selector de arriba de la pantalla elige que pesos corren: **PyTorch**, **TensorFlow** o
+**Comparar** (ambos sobre el mismo video, en paneles lado a lado). Los pesos de TensorFlow
+llegan a ONNX via `inference/portar_pesos_tf_a_onnx.py` (corre en la EC2, el unico entorno
+con ambos frameworks): como las arquitecturas son espejos capa a capa, los pesos de Keras se
+copian al SimpleCNN de PyTorch (transponiendo kernels y reordenando el flatten HWC->CHW) y
+se exporta por el mismo camino que los demas. Cadena verificada de punta a punta: la misma
+entrada da los mismos logits en Keras, en el torch portado, en onnxruntime Python y en
+onnxruntime-web JS (diff < 1e-5).
+
 ## Sobre "usar OpenCV"
 
 En Python, OpenCV cumple dos roles en `predict_camera.py`: capturar frames de la cámara y

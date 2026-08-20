@@ -27,10 +27,7 @@
 }
 
 .overlay-resultado {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 96px;
+  position: relative;
   background: rgba(16, 20, 16, 0.82);
   color: #f2f5f0;
   border-radius: 14px;
@@ -80,3 +77,53 @@
   justify-content: center;
   gap: 14px;
 }
+
+.selector-fw {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  --background: rgba(16, 20, 16, 0.72);
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+}
+
+.panel-simple .overlay-resultado {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 96px;
+}
+
+/* comparar: dos paneles compactos lado a lado */
+.panel-doble {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 96px;
+  display: flex;
+  gap: 10px;
+}
+
+.panel-doble .overlay-resultado {
+  position: relative;
+  flex: 1;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  padding: 12px 12px 26px;
+}
+
+.chip-fw {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9fd4a8;
+  margin-bottom: 4px;
+}
+
+.panel-doble .linea-especie { font-size: 16px; }
+.panel-doble .linea-especie .emoji { font-size: 20px; }
+.panel-doble .linea-raza { font-size: 13px; }
+.panel-doble .latencia { top: auto; bottom: 8px; right: 12px; }

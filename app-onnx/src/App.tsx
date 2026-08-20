@@ -4,12 +4,12 @@
  * inference/predict_camera.py en la laptop con OpenCV.
  */
 import {
-  IonApp, IonBadge, IonButton, IonContent, IonHeader, IonIcon, IonSpinner,
-  IonTitle, IonToolbar, setupIonicReact,
+  IonApp, IonBadge, IonButton, IonContent, IonHeader, IonIcon, IonLabel, IonSegment,
+  IonSegmentButton, IonSpinner, IonTitle, IonToolbar, setupIonicReact,
 } from '@ionic/react';
 import { cameraReverse, pause, play } from 'ionicons/icons';
 import { useEffect, useRef, useState } from 'react';
-import { PipelineOnnx, type Prediccion } from './pipeline';
+import { PipelineOnnx, type Framework, type Prediccion } from './pipeline';
 
 import '@ionic/react/css/core.css';
 import '@ionic/react/css/normalize.css';
@@ -22,20 +22,25 @@ setupIonicReact();
 const EMOJI: Record<string, string> = { perro: '\u{1F436}', gato: '\u{1F431}', ninguno: '\u{1F6AB}' };
 
 type Estado = 'cargando' | 'listo' | 'sin-camara' | 'error';
+type Modo = Framework | 'comparar';
+const CHIP: Record<Framework, string> = { pytorch: 'PyTorch', tensorflow: 'TensorFlow' };
 
 const App: React.FC = () => {
   const [estado, setEstado] = useState<Estado>('cargando');
   const [progreso, setProgreso] = useState('Iniciando...');
-  const [prediccion, setPrediccion] = useState<Prediccion | null>(null);
+  const [predicciones, setPredicciones] = useState<Prediccion[]>([]);
   const [pausado, setPausado] = useState(false);
   const [camaraTrasera, setCamaraTrasera] = useState(true);
+  const [modo, setModo] = useState<Modo>('pytorch');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pipelineRef = useRef<PipelineOnnx | null>(null);
   const pausadoRef = useRef(false);
+  const modoRef = useRef<Modo>('pytorch');
 
   pausadoRef.current = pausado;
+  modoRef.current = modo;
 
   // ---- carga de modelos (una vez) ----
   useEffect(() => {
@@ -95,14 +100,18 @@ const App: React.FC = () => {
           continue;
         }
         try {
-          const pred = await pipeline.predecir(video, canvas);
-          historial.push(pred.especie);
+          const m = modoRef.current;
+          const frameworks: Framework[] = m === 'comparar' ? ['pytorch', 'tensorflow'] : [m];
+          const preds: Prediccion[] = [];
+          for (const fw of frameworks) preds.push(await pipeline.predecir(video, canvas, fw));
+          // el anti-parpadeo se decide con el primer framework del modo activo
+          historial.push(preds[0].especie);
           if (historial.length > 5) historial.shift();
           const conteo = new Map<string, number>();
           for (const e of historial) conteo.set(e, (conteo.get(e) ?? 0) + 1);
           const estable = [...conteo.entries()].sort((a, b) => b[1] - a[1])[0][0];
           // un cuadro suelto que contradice a la mayoria no pisa lo mostrado
-          if (activo && estable === pred.especie) setPrediccion(pred);
+          if (activo && estable === preds[0].especie) setPredicciones(preds);
         } catch (e) {
           console.error('inferencia fallo:', e);
           await new Promise((r) => setTimeout(r, 500));
@@ -114,7 +123,6 @@ const App: React.FC = () => {
     return () => { activo = false; };
   }, [estado]);
 
-  const p = prediccion;
   return (
     <IonApp>
       <IonHeader>
@@ -140,40 +148,55 @@ const App: React.FC = () => {
         <div className="visor" style={{ display: estado === 'listo' ? 'block' : 'none' }}>
           <video ref={videoRef} playsInline muted className="video-preview" />
 
-          {p && (
-            <div className="overlay-resultado">
-              <div className="linea-especie">
-                <span className="emoji">{EMOJI[p.especie] ?? '?'}</span>
-                <span className="especie">{p.especie}</span>
-                <IonBadge color={p.especie === 'ninguno' ? 'medium' : 'success'}>
-                  {(p.especieConfianza * 100).toFixed(0)}%
-                </IonBadge>
-              </div>
+          <IonSegment
+            value={modo}
+            onIonChange={(e) => { setModo(e.detail.value as Modo); setPredicciones([]); }}
+            className="selector-fw"
+          >
+            <IonSegmentButton value="pytorch"><IonLabel>PyTorch</IonLabel></IonSegmentButton>
+            <IonSegmentButton value="tensorflow"><IonLabel>TensorFlow</IonLabel></IonSegmentButton>
+            <IonSegmentButton value="comparar"><IonLabel>Comparar</IonLabel></IonSegmentButton>
+          </IonSegment>
 
-              {p.raza && (
-                <div className="linea-raza">
-                  {p.razaIdentificada ? (
-                    <span>{p.raza.replace(/_/g, ' ')} ({(p.razaConfianza! * 100).toFixed(0)}%)</span>
-                  ) : (
-                    <span className="no-identificada">raza no identificada</span>
-                  )}
-                </div>
-              )}
+          {predicciones.length > 0 && (
+            <div className={predicciones.length > 1 ? 'panel-doble' : 'panel-simple'}>
+              {predicciones.map((p) => (
+                <div className="overlay-resultado" key={p.framework}>
+                  <div className="chip-fw">{CHIP[p.framework]}</div>
+                  <div className="linea-especie">
+                    <span className="emoji">{EMOJI[p.especie] ?? '?'}</span>
+                    <span className="especie">{p.especie}</span>
+                    <IonBadge color={p.especie === 'ninguno' ? 'medium' : 'success'}>
+                      {(p.especieConfianza * 100).toFixed(0)}%
+                    </IonBadge>
+                  </div>
 
-              {p.topRazas.length > 0 && (
-                <div className="top-razas">
-                  {p.topRazas.map(([nombre, prob]) => (
-                    <div key={nombre} className="fila-raza">
-                      <span>{nombre.replace(/_/g, ' ')}</span>
-                      <span className="prob">{(prob * 100).toFixed(1)}%</span>
+                  {p.raza && (
+                    <div className="linea-raza">
+                      {p.razaIdentificada ? (
+                        <span>{p.raza.replace(/_/g, ' ')} ({(p.razaConfianza! * 100).toFixed(0)}%)</span>
+                      ) : (
+                        <span className="no-identificada">raza no identificada</span>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
+                  )}
 
-              <div className="latencia">
-                {p.latenciaMs.toFixed(0)} ms &middot; {(1000 / p.latenciaMs).toFixed(1)} cuadros/s
-              </div>
+                  {predicciones.length === 1 && p.topRazas.length > 0 && (
+                    <div className="top-razas">
+                      {p.topRazas.map(([nombre, prob]) => (
+                        <div key={nombre} className="fila-raza">
+                          <span>{nombre.replace(/_/g, ' ')}</span>
+                          <span className="prob">{(prob * 100).toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="latencia">
+                    {p.latenciaMs.toFixed(0)} ms &middot; {(1000 / p.latenciaMs).toFixed(1)} c/s
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
