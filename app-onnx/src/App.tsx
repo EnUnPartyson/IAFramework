@@ -20,8 +20,6 @@ import './App.css';
 setupIonicReact();
 
 const EMOJI: Record<string, string> = { perro: '\u{1F436}', gato: '\u{1F431}', ninguno: '\u{1F6AB}' };
-// clasificar cada ~400ms: fluido para el ojo sin saturar el CPU del telefono
-const INTERVALO_MS = 400;
 
 type Estado = 'cargando' | 'listo' | 'sin-camara' | 'error';
 
@@ -36,7 +34,6 @@ const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pipelineRef = useRef<PipelineOnnx | null>(null);
   const pausadoRef = useRef(false);
-  const corriendoRef = useRef(false);
 
   pausadoRef.current = pausado;
 
@@ -77,26 +74,44 @@ const App: React.FC = () => {
     return () => stream?.getTracks().forEach((t) => t.stop());
   }, [estado, camaraTrasera]);
 
-  // ---- bucle de clasificacion ----
+  // ---- bucle de clasificacion: continuo, como el de predict_camera.py con OpenCV ----
+  // Sin intervalo fijo: apenas termina una inferencia se toma el frame MAS RECIENTE del
+  // video y se clasifica el siguiente. La tasa de cuadros medidos la pone el hardware
+  // (los modelos V1 tardan decenas de ms en wasm); el video de fondo nunca se frena.
   useEffect(() => {
     if (estado !== 'listo') return;
-    const timer = setInterval(async () => {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const pipeline = pipelineRef.current;
-      // corriendoRef evita encolar inferencias si una tarda mas que el intervalo
-      if (!video || !canvas || !pipeline || pausadoRef.current || corriendoRef.current) return;
-      if (video.readyState < 2 || video.videoWidth === 0) return;
-      corriendoRef.current = true;
-      try {
-        setPrediccion(await pipeline.predecir(video, canvas));
-      } catch (e) {
-        console.error('inferencia fallo:', e);
-      } finally {
-        corriendoRef.current = false;
+    let activo = true;
+    // anti-parpadeo: a cuadro por cuadro la especie puede oscilar en el borde de decision;
+    // se muestra la mayoria de los ultimos 5 cuadros, igual de fresca pero estable
+    const historial: Prediccion['especie'][] = [];
+    (async () => {
+      while (activo) {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const pipeline = pipelineRef.current;
+        if (!video || !canvas || !pipeline || pausadoRef.current
+            || video.readyState < 2 || video.videoWidth === 0) {
+          await new Promise((r) => setTimeout(r, 120));
+          continue;
+        }
+        try {
+          const pred = await pipeline.predecir(video, canvas);
+          historial.push(pred.especie);
+          if (historial.length > 5) historial.shift();
+          const conteo = new Map<string, number>();
+          for (const e of historial) conteo.set(e, (conteo.get(e) ?? 0) + 1);
+          const estable = [...conteo.entries()].sort((a, b) => b[1] - a[1])[0][0];
+          // un cuadro suelto que contradice a la mayoria no pisa lo mostrado
+          if (activo && estable === pred.especie) setPrediccion(pred);
+        } catch (e) {
+          console.error('inferencia fallo:', e);
+          await new Promise((r) => setTimeout(r, 500));
+        }
+        // yield al renderer entre cuadros para que la UI y el video respiren
+        await new Promise(requestAnimationFrame);
       }
-    }, INTERVALO_MS);
-    return () => clearInterval(timer);
+    })();
+    return () => { activo = false; };
   }, [estado]);
 
   const p = prediccion;
@@ -156,7 +171,9 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              <div className="latencia">{p.latenciaMs.toFixed(0)} ms</div>
+              <div className="latencia">
+                {p.latenciaMs.toFixed(0)} ms &middot; {(1000 / p.latenciaMs).toFixed(1)} cuadros/s
+              </div>
             </div>
           )}
 
