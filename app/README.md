@@ -158,11 +158,37 @@ para Play Store -- sirve perfecto para instalar directo (sideload), no para publ
 tienda. Quien lo instale va a tener que aceptar una vez "permitir instalar apps de origenes
 desconocidos" (Android bloquea instalar fuera de Play Store por defecto).
 
-Para **iPhone**: no hay forma de generar un `.ipa` sin una Mac con Xcode (requisito de Apple,
-no hay alternativa en Windows/Linux). Si en algún momento hace falta, las opciones son pedir
-prestada una Mac, alquilar una en la nube (ej. MacStadium, GitHub Actions con runner macOS),
-o -- más simple para una demo -- ofrecer la versión web de la app en el navegador de Safari
-en vez de una app nativa instalada.
+## Versión web (Android e iPhone, sin instalar nada)
+
+La app también se sirve como página normal desde el mismo servidor de la EC2, bajo
+`http://44.201.7.59:8000/app/`. Es la solución para **iPhone**: no hay forma de generar un
+`.ipa` sin una Mac con Xcode (requisito de Apple, no hay alternativa en Windows/Linux), pero
+la versión web funciona igual en Safari que en Chrome de Android -- se puede incluso "Agregar
+a inicio" desde el navegador para que quede con un icono como una app instalada.
+
+Cómo se genera: un build de Vite aparte del que usa la app nativa, con la URL de la API y el
+prefijo de ruta ya integrados. **Importante en Git Bash / MSYS**: pasar `--base=/app/` sin
+`MSYS_NO_PATHCONV=1` hace que MSYS lo interprete como una ruta de Windows y lo convierta a
+algo como `C:/Program Files/Git/app/` -- el sintoma es un `<base href="/Program Files/Git/app/" />`
+roto en el HTML generado.
+
+```bash
+MSYS_NO_PATHCONV=1 VITE_API_URL=http://44.201.7.59:8000     npx vite build --base=/app/ --outDir dist-web
+```
+
+Subir el build (reemplaza el anterior por completo, por eso `-r` y sin merge parcial):
+
+```bash
+scp -i tu-llave.pem -r dist-web ubuntu@44.201.7.59:~/IAFramework/app/dist-web
+ssh -i tu-llave.pem ubuntu@44.201.7.59 "sudo systemctl restart mascotas-api"
+```
+
+`inference/server.py` monta ese directorio en `/app` con `StaticFiles(html=True)` -- si
+`dist-web/` no existe en el servidor, esa ruta simplemente no está disponible, no rompe el
+resto de la API. El router de la app (`App.tsx`) usa `basename={{import.meta.env.BASE_URL}}`,
+que Vite resuelve a `/` en el build nativo/dev y a `/app/` en este build -- por eso hace falta
+mantener los dos builds (`dist/` para Android, `dist-web/` para esto) por separado en vez de
+reusar uno para el otro.
 
 ## Configurar la URL del servidor
 

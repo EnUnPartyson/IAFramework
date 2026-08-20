@@ -37,7 +37,10 @@ setupIonicReact();
 
 const App: React.FC = () => (
   <IonApp>
-    <IonReactRouter>
+    {/* BASE_URL lo fija Vite en build time (--base): "/" para la app nativa y el dev
+        server, "/app/" para el build que se sirve como pagina web desde el mismo
+        servidor de la API (ver app/README.md, seccion "Version web"). */}
+    <IonReactRouter basename={import.meta.env.BASE_URL}>
       <IonRouterOutlet>
         <Route exact path="/home">
           <Home />

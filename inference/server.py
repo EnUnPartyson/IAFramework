@@ -22,6 +22,7 @@ import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from PIL import Image, UnidentifiedImageError
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -34,6 +35,12 @@ from inference.pipeline_pytorch import PetPipeline, Prediction  # noqa: E402
 # devuelve 404 en vez de romper el arranque del server.
 APK_PATH = ROOT_DIR / "deploy" / "clasificador-mascotas.apk"
 
+# Version web de la app Ionic, servida desde el mismo servidor bajo /app/. Se compila
+# con `VITE_API_URL=<esta-misma-url> npx vite build --base=/app/ --outDir dist-web`
+# (ver app/README.md): al vivir en el mismo origen que la API, cualquiera con el link
+# la abre en el navegador (Android o iPhone) sin instalar nada y sin configurar la URL.
+WEB_APP_DIR = ROOT_DIR / "app" / "dist-web"
+
 app = FastAPI(title="Clasificador de Mascotas", version="1.0")
 
 # la app Ionic corre en otro origen (capacitor://localhost o http://localhost:8100)
@@ -44,6 +51,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if WEB_APP_DIR.is_dir():
+    # html=True: GET /app/ sirve index.html; cualquier archivo del build (JS, CSS,
+    # favicon) se sirve por su ruta exacta. Es opcional: si dist-web/ no existe (no se
+    # genero ese build), el server igual arranca y solo falta esta ruta.
+    app.mount("/app", StaticFiles(directory=WEB_APP_DIR, html=True), name="webapp")
+    print(f"[server] version web de la app montada en /app (desde {WEB_APP_DIR})")
+else:
+    print(f"[server] AVISO: {WEB_APP_DIR} no existe; /app no va a estar disponible")
 
 # puede haber uno o los dos frameworks cargados a la vez: para inferencia en CPU
 # torch y tensorflow conviven sin el conflicto de CUDA que obliga a venvs separados
@@ -103,6 +119,7 @@ def inicio() -> str:
 <h1>Clasificador de Mascotas</h1>
 <p class="estado">{estado}</p>
 <table>
+ <tr><td><a href="/app/">/app/</a></td><td><b>Abrir la app en el navegador</b> -- funciona en Android e iPhone, sin instalar nada</td></tr>
  <tr><td><a href="/descargar">/descargar</a></td><td><b>Bajar la app para Android (.apk)</b> -- ya viene apuntando a este servidor</td></tr>
  <tr><td><a href="/docs">/docs</a></td><td>Probar la API desde el navegador: subir una foto y ver la prediccion</td></tr>
  <tr><td><a href="/health">/health</a></td><td>Estado del servidor</td></tr>
