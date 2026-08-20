@@ -130,7 +130,41 @@ Android bloquea HTTP sin cifrar desde la versión 9. `capacitor.config.ts` ya tr
 Después `npx cap sync` y compilar de nuevo. La causa es que la API va por HTTP plano; con
 HTTPS el problema desaparecería.
 
-## 3. Configurar la URL del servidor
+## Compartir la app (APK descargable)
+
+El servidor de la EC2 (`inference/server.py`, siempre encendido) sirve la APK directo desde
+`http://44.201.7.59:8000/descargar` -- cualquiera con ese link la baja e instala, sin pasar
+por Play Store ni necesitar Android Studio.
+
+Para que quien la instala no tenga que tocar los ajustes, esa APK se compila con la URL del
+servidor ya integrada (`VITE_API_URL`), a diferencia de la que usas vos en desarrollo:
+
+```bash
+VITE_API_URL=http://44.201.7.59:8000 npm run build
+npx cap sync android
+cd android
+JAVA_HOME="C:/Program Files/Android/Android Studio/jbr" ./gradlew assembleDebug
+```
+
+El APK queda en `android/app/build/outputs/apk/debug/app-debug.apk`. Subirlo al servidor:
+
+```bash
+scp -i tu-llave.pem android/app/build/outputs/apk/debug/app-debug.apk     ubuntu@44.201.7.59:~/IAFramework/deploy/clasificador-mascotas.apk
+ssh -i tu-llave.pem ubuntu@44.201.7.59 "sudo systemctl restart mascotas-api"
+```
+
+Repetir cada vez que cambie el código de la app. **Nota:** es un APK de *debug*, sin firmar
+para Play Store -- sirve perfecto para instalar directo (sideload), no para publicar en la
+tienda. Quien lo instale va a tener que aceptar una vez "permitir instalar apps de origenes
+desconocidos" (Android bloquea instalar fuera de Play Store por defecto).
+
+Para **iPhone**: no hay forma de generar un `.ipa` sin una Mac con Xcode (requisito de Apple,
+no hay alternativa en Windows/Linux). Si en algún momento hace falta, las opciones son pedir
+prestada una Mac, alquilar una en la nube (ej. MacStadium, GitHub Actions con runner macOS),
+o -- más simple para una demo -- ofrecer la versión web de la app en el navegador de Safari
+en vez de una app nativa instalada.
+
+## Configurar la URL del servidor
 
 | Dónde corre la app | URL a usar |
 |---|---|

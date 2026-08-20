@@ -8,10 +8,11 @@
 import { Preferences } from '@capacitor/preferences';
 
 const CLAVE_URL = 'apiBaseUrl';
-// localhost sirve al correr la app en el navegador de la misma maquina que la API.
-// Desde el celular hay que cambiarla en los ajustes por la IP que imprime el servidor:
-// pasar por la IP de red desde el mismo equipo puede chocar con el firewall de Windows.
-const URL_POR_DEFECTO = 'http://localhost:8000';
+// localhost sirve al correr la app nativa (Android) apuntando a una API en la misma maquina.
+// VITE_API_URL la fija el build "web para compartir" (ver app/README.md): ese build se sirve
+// desde el mismo servidor que la API, asi que puede traer la URL ya resuelta de fabrica y
+// quien abre el link no tiene que tocar los ajustes.
+const URL_POR_DEFECTO = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 export interface Prediccion {
   especie: 'perro' | 'gato' | 'ninguno';

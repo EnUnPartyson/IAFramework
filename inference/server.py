@@ -21,11 +21,18 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from PIL import Image, UnidentifiedImageError
 
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.append(str(ROOT_DIR))
 from inference.pipeline_pytorch import PetPipeline, Prediction  # noqa: E402
+
+# APK de la app Ionic, servida desde el mismo servidor para que se pueda compartir con un
+# link (ver app/README.md: se compila con VITE_API_URL apuntando a esta misma instancia,
+# asi que quien la instala no tiene que configurar nada). Opcional: si no esta, /descargar
+# devuelve 404 en vez de romper el arranque del server.
+APK_PATH = ROOT_DIR / "deploy" / "clasificador-mascotas.apk"
 
 app = FastAPI(title="Clasificador de Mascotas", version="1.0")
 
@@ -96,6 +103,7 @@ def inicio() -> str:
 <h1>Clasificador de Mascotas</h1>
 <p class="estado">{estado}</p>
 <table>
+ <tr><td><a href="/descargar">/descargar</a></td><td><b>Bajar la app para Android (.apk)</b> -- ya viene apuntando a este servidor</td></tr>
  <tr><td><a href="/docs">/docs</a></td><td>Probar la API desde el navegador: subir una foto y ver la prediccion</td></tr>
  <tr><td><a href="/health">/health</a></td><td>Estado del servidor</td></tr>
  <tr><td><a href="/info">/info</a></td><td>Modelos cargados, clases y umbrales</td></tr>
@@ -104,6 +112,18 @@ def inicio() -> str:
 <p class="pie">Si llegaste aca desde el celular, la conexion funciona: pone esta misma
 direccion en los ajustes de la app.</p>
 </body></html>"""
+
+
+@app.get("/descargar")
+def descargar_apk() -> FileResponse:
+    """APK de la app para Android. Instalarla pide activar 'apps de origenes desconocidos'
+    una vez (Android bloquea instalar fuera de Play Store por defecto)."""
+    if not APK_PATH.exists():
+        raise HTTPException(status_code=404, detail="la apk todavia no se subio a este servidor")
+    return FileResponse(
+        APK_PATH, media_type="application/vnd.android.package-archive",
+        filename="clasificador-mascotas.apk",
+    )
 
 
 @app.get("/health")
