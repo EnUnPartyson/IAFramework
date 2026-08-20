@@ -36,6 +36,17 @@ app/.angular/
 app/android/
 app/ios/
 
+# app-onnx (Mascotas Live): mismos criterios; public/models SI se versiona (la app no
+# compila sin los .onnx) y public/ort NO (se regenera con npm run copy-ort)
+app-onnx/node_modules/
+app-onnx/dist/
+app-onnx/android/
+app-onnx/public/ort/
+
+# exportes ONNX intermedios (reproducibles con inference/export_onnx.py; las copias que
+# importan viven en app-onnx/public/models/)
+models/onnx/
+
 # Capturas del script de camara
 capturas/
 

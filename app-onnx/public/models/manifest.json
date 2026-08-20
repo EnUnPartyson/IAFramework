@@ -1,0 +1,93 @@
+{
+  "v1": {
+    "detector": {
+      "archivo": "detector_v1.onnx",
+      "clases": [
+        "gato",
+        "ninguno",
+        "perro"
+      ],
+      "img_size": 128,
+      "norm_mean": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "norm_std": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "umbral_no_identificada": null,
+      "temperatura": 1.0
+    },
+    "dog_breed": {
+      "archivo": "dog_breed_v1.onnx",
+      "clases": [
+        "bichon_frise",
+        "border_collie",
+        "cardigan",
+        "chihuahua",
+        "chinese_rural_dog",
+        "french_bulldog",
+        "golden_retriever",
+        "labrador_retriever",
+        "malamute",
+        "miniature_pinscher",
+        "miniature_schnauzer",
+        "papillon",
+        "pomeranian",
+        "pug",
+        "samoyed",
+        "shiba_dog",
+        "siberian_husky",
+        "teddy",
+        "toy_poodle",
+        "yorkshire_terrier"
+      ],
+      "img_size": 160,
+      "norm_mean": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "norm_std": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "umbral_no_identificada": 0.65,
+      "temperatura": 1.0
+    },
+    "cat_breed": {
+      "archivo": "cat_breed_v1.onnx",
+      "clases": [
+        "abyssinian",
+        "bengal",
+        "birman",
+        "bombay",
+        "british_shorthair",
+        "egyptian_mau",
+        "maine_coon",
+        "persian",
+        "ragdoll",
+        "russian_blue",
+        "siamese",
+        "sphynx"
+      ],
+      "img_size": 160,
+      "norm_mean": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "norm_std": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "umbral_no_identificada": 0.3,
+      "temperatura": 1.0
+    }
+  }
+}

@@ -1,0 +1,82 @@
+.estado-centrado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+  color: var(--ion-color-medium);
+}
+
+.badge-ondevice {
+  margin-right: 12px;
+}
+
+.visor {
+  position: relative;
+  height: 100%;
+  background: #000;
+}
+
+.video-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.overlay-resultado {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 96px;
+  background: rgba(16, 20, 16, 0.82);
+  color: #f2f5f0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  backdrop-filter: blur(4px);
+}
+
+.linea-especie {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.linea-especie .emoji { font-size: 26px; }
+
+.linea-raza { margin-top: 6px; font-size: 16px; }
+.no-identificada { color: #f0b429; }
+
+.top-razas { margin-top: 10px; display: flex; flex-direction: column; gap: 3px; }
+.fila-raza {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #c9d2c6;
+  text-transform: capitalize;
+}
+.fila-raza .prob { font-variant-numeric: tabular-nums; }
+
+.latencia {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-size: 11px;
+  color: #9aa79a;
+  font-variant-numeric: tabular-nums;
+}
+
+.controles {
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}

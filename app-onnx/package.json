@@ -1,0 +1,29 @@
+{
+  "name": "clasificador-mascotas-live",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "copy-ort": "node scripts/copy-ort.mjs",
+    "dev": "npm run copy-ort && vite",
+    "build": "npm run copy-ort && tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "8.5.0",
+    "@ionic/react": "^8.5.0",
+    "ionicons": "^7.4.0",
+    "onnxruntime-web": "^1.22.0",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.0",
+    "@types/react": "19.0.10",
+    "@types/react-dom": "19.0.4",
+    "@vitejs/plugin-react": "^4.0.1",
+    "typescript": "^5.1.6",
+    "vite": "^5.2.0"
+  }
+}

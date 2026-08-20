@@ -102,13 +102,15 @@ Registro de decisiones tomadas durante el proyecto y pendientes por resolver. Ac
 
 | 2026-08-19 | En GPU, el pro activa **TF32 y cudnn.benchmark** ademas del AMP por defecto | TF32 es aceleracion gratis en Ampere o posterior (A10G, L4, L40S: las GPUs candidatas de la EC2 nueva) sin perdida practica de precision para CNNs; cudnn.benchmark autotunea los kernels porque el tamano de entrada es fijo. `run_pro.sh` expone `BATCH` (subir a 128 en GPUs de 24 GB) |
 
+| 2026-08-20 | **ONNX se implementa, pero para inferencia on-device, no para lo que se habia planteado**: nace `app-onnx/` ("Mascotas Live"), una segunda app que corre los modelos V1 dentro del telefono con onnxruntime-web y clasifica la camara en vivo, sin API ni internet | El pendiente original de ONNX (unificar formatos para que `predict_camera.py` cargara ambos frameworks) se habia vuelto irrelevante: en CPU torch y tensorflow conviven en el mismo venv. El valor real de ONNX resulto ser otro: eliminar el servidor. Solo van los modelos V1 (~32 MB en total, decenas de ms por cuadro); los PRO (ConvNeXt, ~110 MB c/u) son inviables para empaquetar y para video en wasm, y siguen disponibles via la app original + API. Paridad verificada de punta a punta: misma entrada -> mismos logits en PyTorch, onnxruntime Python y onnxruntime-web JS (diff < 1e-5). La app original (`app/`) queda intacta para PC/web y para el modo PRO |
+
 ## Pendientes por decidir
 
 - [x] ~~Tipo de instancia EC2 definitivo~~ — decidido 2026-07-23: **g4dn.xlarge on-demand** (~$0.53/h). El pipeline completo (~4-6h) cuesta ~$3 de los $200 de crédito; una CPU grande saldría más cara y tardaría días. Disco: 60-80GB gp3. Correr en tmux, hacer STOP (no terminate) al terminar
 - [ ] Cantidad de razas a incluir por especie (todas vs subset) — aplica a Modelo 2 y 3, no bloquea al Modelo 1
 - [ ] Cómo repartir el trabajo entre los dos integrantes — con 6 pipelines, una opción natural es 1 persona = 1 framework (todas las versiones PyTorch vs todas las TF) en vez de repartir por modelo
 - [ ] Nombre final del producto / enfoque comercial específico (veterinaria vs refugio vs app consumidor)
-- [ ] `inference/predict_camera.py`: si carga ambas versiones (TF y PyTorch) para comparar en vivo, o solo la elegida como "final" por modelo — implica tener ambos venvs disponibles en la máquina de inferencia o exportar a un formato común (ONNX)
+- [x] ~~`inference/predict_camera.py`: ambos frameworks o formato común (ONNX)~~ — resuelto: en CPU ambos frameworks conviven en el mismo venv (el conflicto CUDA es solo de GPU), y ONNX se terminó usando para otra cosa (inferencia on-device en `app-onnx/`, decisión 2026-08-20)
 
 ## Pendiente por construir
 

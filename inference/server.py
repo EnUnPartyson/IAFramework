@@ -34,6 +34,8 @@ from inference.pipeline_pytorch import PetPipeline, Prediction  # noqa: E402
 # asi que quien la instala no tiene que configurar nada). Opcional: si no esta, /descargar
 # devuelve 404 en vez de romper el arranque del server.
 APK_PATH = ROOT_DIR / "deploy" / "clasificador-mascotas.apk"
+# APK de "Mascotas Live" (app-onnx/): inferencia ONNX on-device con camara en vivo, sin API
+APK_LIVE_PATH = ROOT_DIR / "deploy" / "mascotas-live.apk"
 
 # Version web de la app Ionic, servida desde el mismo servidor bajo /app/. Se compila
 # con `VITE_API_URL=<esta-misma-url> npx vite build --base=/app/ --outDir dist-web`
@@ -121,6 +123,7 @@ def inicio() -> str:
 <table>
  <tr><td><a href="/app/">/app/</a></td><td><b>Abrir la app en el navegador</b> -- funciona en Android e iPhone, sin instalar nada</td></tr>
  <tr><td><a href="/descargar">/descargar</a></td><td><b>Bajar la app para Android (.apk)</b> -- ya viene apuntando a este servidor</td></tr>
+ <tr><td><a href="/descargar/live">/descargar/live</a></td><td><b>Bajar "Mascotas Live" (.apk)</b> -- camara en vivo con inferencia ONNX en el telefono, funciona sin internet</td></tr>
  <tr><td><a href="/docs">/docs</a></td><td>Probar la API desde el navegador: subir una foto y ver la prediccion</td></tr>
  <tr><td><a href="/health">/health</a></td><td>Estado del servidor</td></tr>
  <tr><td><a href="/info">/info</a></td><td>Modelos cargados, clases y umbrales</td></tr>
@@ -140,6 +143,17 @@ def descargar_apk() -> FileResponse:
     return FileResponse(
         APK_PATH, media_type="application/vnd.android.package-archive",
         filename="clasificador-mascotas.apk",
+    )
+
+
+@app.get("/descargar/live")
+def descargar_apk_live() -> FileResponse:
+    """APK de Mascotas Live: los modelos corren EN el telefono (ONNX), no necesita red."""
+    if not APK_LIVE_PATH.exists():
+        raise HTTPException(status_code=404, detail="la apk live todavia no se subio a este servidor")
+    return FileResponse(
+        APK_LIVE_PATH, media_type="application/vnd.android.package-archive",
+        filename="mascotas-live.apk",
     )
 
 
