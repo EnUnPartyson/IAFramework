@@ -127,9 +127,9 @@ export class PipelineOnnx {
     return softmax(salida.logits.data as Float32Array, modelo.info.temperatura);
   }
 
-  /** Clasifica el frame actual del video con el stack del framework indicado. */
+  /** Clasifica un frame de video o una imagen quieta con el stack del framework indicado. */
   async predecir(
-    video: HTMLVideoElement,
+    fuente: HTMLVideoElement | HTMLImageElement,
     canvas: HTMLCanvasElement,
     framework: Framework,
   ): Promise<Prediccion> {
@@ -140,8 +140,8 @@ export class PipelineOnnx {
     const dibujar = (s: number) => {
       canvas.width = s;
       canvas.height = s;
-      // Resize((s, s)) del eval transform: estira el frame completo, sin recortar
-      canvas.getContext('2d', { willReadFrequently: true })!.drawImage(video, 0, 0, s, s);
+      // Resize((s, s)) del eval transform: estira la imagen completa, sin recortar
+      canvas.getContext('2d', { willReadFrequently: true })!.drawImage(fuente, 0, 0, s, s);
     };
 
     dibujar(stack.detector.info.img_size);

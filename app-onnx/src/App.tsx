@@ -7,7 +7,7 @@ import {
   IonApp, IonBadge, IonButton, IonContent, IonHeader, IonIcon, IonLabel, IonSegment,
   IonSegmentButton, IonSpinner, IonTitle, IonToolbar, setupIonicReact,
 } from '@ionic/react';
-import { cameraReverse, pause, play } from 'ionicons/icons';
+import { cameraReverse, images, pause, play, videocam } from 'ionicons/icons';
 import { useEffect, useRef, useState } from 'react';
 import { PipelineOnnx, type Framework, type Prediccion } from './pipeline';
 
@@ -32,8 +32,13 @@ const App: React.FC = () => {
   const [pausado, setPausado] = useState(false);
   const [camaraTrasera, setCamaraTrasera] = useState(true);
   const [modo, setModo] = useState<Modo>('pytorch');
+  // dataURL de una foto elegida de la galeria; mientras exista, el bucle en vivo se frena
+  // y la clasificacion corre sobre la imagen quieta
+  const [foto, setFoto] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const inputFotoRef = useRef<HTMLInputElement>(null);
+  const fotoRef = useRef<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pipelineRef = useRef<PipelineOnnx | null>(null);
   const pausadoRef = useRef(false);
@@ -41,6 +46,7 @@ const App: React.FC = () => {
 
   pausadoRef.current = pausado;
   modoRef.current = modo;
+  fotoRef.current = foto;
 
   // ---- carga de modelos (una vez) ----
   useEffect(() => {
@@ -94,7 +100,7 @@ const App: React.FC = () => {
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const pipeline = pipelineRef.current;
-        if (!video || !canvas || !pipeline || pausadoRef.current
+        if (!video || !canvas || !pipeline || pausadoRef.current || fotoRef.current
             || video.readyState < 2 || video.videoWidth === 0) {
           await new Promise((r) => setTimeout(r, 120));
           continue;
@@ -123,6 +129,43 @@ const App: React.FC = () => {
     return () => { activo = false; };
   }, [estado]);
 
+  const clasificarFoto = async (url: string, m: Modo) => {
+    const canvas = canvasRef.current;
+    const pipeline = pipelineRef.current;
+    if (!canvas || !pipeline) return;
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const frameworks: Framework[] = m === 'comparar' ? ['pytorch', 'tensorflow'] : [m];
+    const preds: Prediccion[] = [];
+    for (const fw of frameworks) preds.push(await pipeline.predecir(img, canvas, fw));
+    setPredicciones(preds);
+  };
+
+  const elegirFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = e.target.files?.[0];
+    e.target.value = ''; // permite volver a elegir el mismo archivo
+    if (!archivo) return;
+    if (fotoRef.current) URL.revokeObjectURL(fotoRef.current);
+    const url = URL.createObjectURL(archivo);
+    setFoto(url);
+    setPredicciones([]);
+    void clasificarFoto(url, modoRef.current);
+  };
+
+  const volverACamara = () => {
+    if (fotoRef.current) URL.revokeObjectURL(fotoRef.current);
+    setFoto(null);
+    setPredicciones([]);
+  };
+
+  const cambiarModo = (m: Modo) => {
+    setModo(m);
+    setPredicciones([]);
+    // sobre una foto quieta el bucle no corre: reclasificar aca con el modo nuevo
+    if (fotoRef.current) void clasificarFoto(fotoRef.current, m);
+  };
+
   return (
     <IonApp>
       <IonHeader>
@@ -146,11 +189,18 @@ const App: React.FC = () => {
         )}
 
         <div className="visor" style={{ display: estado === 'listo' ? 'block' : 'none' }}>
-          <video ref={videoRef} playsInline muted className="video-preview" />
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className="video-preview"
+            style={{ display: foto ? 'none' : 'block' }}
+          />
+          {foto && <img src={foto} alt="Foto elegida de la galeria" className="video-preview" />}
 
           <IonSegment
             value={modo}
-            onIonChange={(e) => { setModo(e.detail.value as Modo); setPredicciones([]); }}
+            onIonChange={(e) => cambiarModo(e.detail.value as Modo)}
             className="selector-fw"
           >
             <IonSegmentButton value="pytorch"><IonLabel>PyTorch</IonLabel></IonSegmentButton>
@@ -201,13 +251,33 @@ const App: React.FC = () => {
           )}
 
           <div className="controles">
-            <IonButton shape="round" onClick={() => setPausado(!pausado)}>
-              <IonIcon slot="icon-only" icon={pausado ? play : pause} />
-            </IonButton>
-            <IonButton shape="round" fill="outline" onClick={() => setCamaraTrasera(!camaraTrasera)}>
-              <IonIcon slot="icon-only" icon={cameraReverse} />
+            {foto ? (
+              <IonButton shape="round" onClick={volverACamara}>
+                <IonIcon slot="start" icon={videocam} />
+                Volver a la camara
+              </IonButton>
+            ) : (
+              <>
+                <IonButton shape="round" onClick={() => setPausado(!pausado)}>
+                  <IonIcon slot="icon-only" icon={pausado ? play : pause} />
+                </IonButton>
+                <IonButton shape="round" fill="outline" onClick={() => setCamaraTrasera(!camaraTrasera)}>
+                  <IonIcon slot="icon-only" icon={cameraReverse} />
+                </IonButton>
+              </>
+            )}
+            <IonButton shape="round" fill="outline" onClick={() => inputFotoRef.current?.click()}>
+              <IonIcon slot="icon-only" icon={images} />
             </IonButton>
           </div>
+
+          <input
+            ref={inputFotoRef}
+            type="file"
+            accept="image/*"
+            onChange={elegirFoto}
+            style={{ display: 'none' }}
+          />
         </div>
       </IonContent>
     </IonApp>
